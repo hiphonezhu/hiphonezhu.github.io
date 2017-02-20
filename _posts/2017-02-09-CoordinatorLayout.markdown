@@ -175,9 +175,7 @@ app:layout_scrollFlags="scroll"
 ![scroll](http://upload-images.jianshu.io/upload_images/1787010-514ebefa105c383f.gif?imageMogr2/auto-orient/strip)
   除了 scroll，还有下面几个取值，这些属性都必须与 scroll 一起使用 **“|”** 运算符。
 * enterAlways：与 scroll 类似（`scroll|enterAlways`），只不过向下滚动先显示 AppBarLayout 到完全，再滚动 Scrolling View。
-
 ![scroll|enterAlways](http://upload-images.jianshu.io/upload_images/1787010-3d0af6aa0093140b.gif?imageMogr2/auto-orient/strip)
-
 * enterAlwaysCollapsed：需要和 enterAlways 一起使用（`scroll|enterAlways|enterAlwaysCollapsed`），和 enterAlways 不一样的是，不会显示 AppBarLayout 到完全再滚动 Scrolling View，而是先滚动 AppBarLayout 到最小高度，再滚动 Scrolling View，最后再滚动 AppBarLayout 到完全显示。
 
   注意：需要定义 View 的最小高度（minHeight）才有效果：
@@ -358,12 +356,12 @@ app:layout_behavior="具体Behavior的类路径"
 ```
 @Override
 public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
-   int xConsumed = 0;
-   int yConsumed = 0;
-   boolean accepted = false;
+    int xConsumed = 0;
+    int yConsumed = 0;
+    boolean accepted = false;
 
-   final int childCount = getChildCount();
-   for (int i = 0; i < childCount; i++) {
+    final int childCount = getChildCount();
+    for (int i = 0; i < childCount; i++) {
        final View view = getChildAt(i);
 
        final Behavior viewBehavior = lp.getBehavior();
@@ -378,10 +376,10 @@ public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
 
            accepted = true;
        }
-   }
+    }
 
-   consumed[0] = xConsumed;
-   consumed[1] = yConsumed;
+    consumed[0] = xConsumed;
+    consumed[1] = yConsumed;
 }
 ```
 3. NestedScrollView 的 Behavior：`AppBarLayout.ScrollingViewBehavor`，它的 onNestedPreScroll 没有做任何实现；
@@ -391,7 +389,7 @@ public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
 @Override
 public void onNestedPreScroll(CoordinatorLayout coordinatorLayout, AppBarLayout child,
         View target, int dx, int dy, int[] consumed) {
-   if (dy != 0 && !mSkipNestedPreScroll) {
+    if (dy != 0 && !mSkipNestedPreScroll) {
        int min, max;
        if (dy < 0) {
            // We're scrolling down
@@ -403,7 +401,7 @@ public void onNestedPreScroll(CoordinatorLayout coordinatorLayout, AppBarLayout 
            max = 0;
        }
        consumed[1] = scroll(coordinatorLayout, child, dy, min, max);
-   }
+    }
 }
 ```
 很好理解，我们滑动 NestedScrollView 的时候，AppBarLayout 会向上滚动，所以就需要消耗部分滚动的距离。
