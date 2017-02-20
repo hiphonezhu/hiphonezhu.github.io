@@ -21,14 +21,14 @@ CoordinatorLayout 作为一个 **“super-powered FrameLayout”**，主要有�
 2. 作为协调子 View 之间交互的容器。
 
 使用 CoordinatorLayout 需要在 build.gradle 加入：
-
+```
     compile 'com.android.support:design:25.1.0'
-
+```
 
 **二、CoordinatorLayout 与 FloatingActionButton**
 
 2.1 FloatingActionButton（以下简称 FAB） 单独使用，布局如下：
-
+```
     <?xml version="1.0" encoding="utf-8"?>
     <RelativeLayout     
         xmlns:android="http://schemas.android.com/apk/res/android"
@@ -46,8 +46,9 @@ CoordinatorLayout 作为一个 **“super-powered FrameLayout”**，主要有�
             android:layout_marginRight="10dp"
             android:layout_marginBottom="10dp"/>
     </RelativeLayout>
+```
 点击 FAB，弹出一个 Snackbar：
-
+```
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.fab:
@@ -55,6 +56,7 @@ CoordinatorLayout 作为一个 **“super-powered FrameLayout”**，主要有�
                 break;
         }
     }
+```
 效果如下：
 
 ![FloatingActionButton_Simple](http://upload-images.jianshu.io/upload_images/1787010-785705866002c28d.gif?imageMogr2/auto-orient/strip)
