@@ -14,7 +14,7 @@ tags:
 
 
 
-## 一、CoordinatorLayout 的作用 ##
+## CoordinatorLayout 的作用
 
 CoordinatorLayout 作为一个 **“super-powered FrameLayout”**，主要有以下两个作用：
 1. 作为顶层布局；
