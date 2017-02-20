@@ -14,7 +14,7 @@ tags:
 
 
 
-# 一、CoordinatorLayout 的作用
+## 一、CoordinatorLayout 的作用
 
 CoordinatorLayout 作为一个 **“super-powered FrameLayout”**，主要有以下两个作用：
 1. 作为顶层布局；
@@ -25,7 +25,7 @@ CoordinatorLayout 作为一个 **“super-powered FrameLayout”**，主要有�
 compile 'com.android.support:design:25.1.0'
 ```
 
-# 二、CoordinatorLayout 与 FloatingActionButton
+## 二、CoordinatorLayout 与 FloatingActionButton
 
 2.1 FloatingActionButton（以下简称 FAB） 单独使用，布局如下：
 ```
@@ -100,7 +100,7 @@ CoordinatorLayout 提供了两个属性用来设置 FAB 的位置：
 
 CoordinatorLayout 最简单的使用例子就是和 FAB 一起使用了，我们接着往下看其它用法。
 
-# 三、CoordinatorLayout 与 AppBarLayout
+## 三、CoordinatorLayout 与 AppBarLayout
 
 AppBarLayout 是一个垂直布局的 LinearLayout，它主要是为了实现 **“Material Design”** 风格的标题栏的特性，比如：滚动。
 
@@ -194,7 +194,7 @@ app:layout_scrollFlags="scroll|exitUntilCollapsed"
 
 enterAlwaysCollapsed 与 exitUntilCollapsed 在实际的使用中，更多的是与 CollapsingToolbarLayout 一起使用，我们继续往下看。
 
-# 四、CoordinatorLayout 与 CollapsingToolbarLayout
+## 四、CoordinatorLayout 与 CollapsingToolbarLayout
 
 CollapsingToolbarLayout 继承自 FrameLayout，它是用来实现 Toolbar 的折叠效果，一般它的直接子 View 是 Toolbar，当然也可以是其它类型的 View。
 
@@ -327,7 +327,7 @@ app:layout_collapseParallaxMultiplier="0.9"
 
 * statusBarScrim：表示状态栏的“前景色”，试验下来并无效果，知道的同学麻烦告诉下~
 
-# 五、终极 Boss - Behavior
+## 五、终极 Boss - Behavior
 
 5.1 介绍
 
@@ -512,7 +512,7 @@ public class CusBehavior extends CoordinatorLayout.Behavior {
 
 其实 FloatingActionButton 示例中：layout_anchor 使用某个 View 作为锚点，就是用了这个原理，具体可以参考：FloatingActionButton.Behavior 。
 
-# 六、写在最后
+## 六、写在最后
 
 1. 本文的效果是在5.0+系统上运行的，所以低版本的系统状态栏的表现可能不一致。
 2. 本文只是演示了 CoodinatorLayout 的多数基本用法，实际应用中的效果一般比这个复杂很多。
