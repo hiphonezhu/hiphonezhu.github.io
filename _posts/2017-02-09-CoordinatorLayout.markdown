@@ -22,40 +22,40 @@ CoordinatorLayout 作为一个 **“super-powered FrameLayout”**，主要有�
 
 使用 CoordinatorLayout 需要在 build.gradle 加入：
 ```
-    compile 'com.android.support:design:25.1.0'
+compile 'com.android.support:design:25.1.0'
 ```
 
 **二、CoordinatorLayout 与 FloatingActionButton**
 
 2.1 FloatingActionButton（以下简称 FAB） 单独使用，布局如下：
 ```
-    <?xml version="1.0" encoding="utf-8"?>
-    <RelativeLayout     
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        android:id="@+id/contentView"
-        android:orientation="vertical"     
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
-        <android.support.design.widget.FloatingActionButton
-            android:id="@+id/fab"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true"
-            android:layout_alignParentRight="true"
-            android:onClick="onClick"
-            android:layout_marginRight="10dp"
-            android:layout_marginBottom="10dp"/>
-    </RelativeLayout>
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout     
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/contentView"
+    android:orientation="vertical"     
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentRight="true"
+        android:onClick="onClick"
+        android:layout_marginRight="10dp"
+        android:layout_marginBottom="10dp"/>
+</RelativeLayout>
 ```
 点击 FAB，弹出一个 Snackbar：
 ```
-    public void onClick(View v) {
-        switch (v.getId()) {
-            case R.id.fab:
-                Snackbar.make(findViewById(R.id.contentView), "Snackbar", Snackbar.LENGTH_SHORT).show();
-                break;
-        }
+public void onClick(View v) {
+    switch (v.getId()) {
+        case R.id.fab:
+            Snackbar.make(findViewById(R.id.contentView), "Snackbar", Snackbar.LENGTH_SHORT).show();
+            break;
     }
+}
 ```
 效果如下：
 
@@ -64,30 +64,31 @@ CoordinatorLayout 作为一个 **“super-powered FrameLayout”**，主要有�
 FAB 会被 Snackbar 遮挡，此时需要使用到 CoordinatorLayout。
 
 2.2 与 CoordinatorLayout 一起使用，布局调整如下：
-
-    <?xml version="1.0" encoding="utf-8"?>
-    <android.support.design.widget.CoordinatorLayout
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:id="@+id/contentView"
-        android:orientation="vertical"
+```
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.design.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/contentView"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <LinearLayout
+        android:id="@+id/anchorView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-        <LinearLayout
-            android:id="@+id/anchorView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"/>
-        <android.support.design.widget.FloatingActionButton
-            android:id="@+id/fab"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:layout_anchor="@id/anchorView"
-            app:layout_anchorGravity="bottom|right"
-            android:onClick="onClick"
-            android:layout_marginRight="10dp"
-            android:layout_marginBottom="10dp"/>
-    </android.support.design.widget.CoordinatorLayout>
+        android:layout_height="match_parent"
+        android:orientation="vertical"/>
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/fab"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_anchor="@id/anchorView"
+        app:layout_anchorGravity="bottom|right"
+        android:onClick="onClick"
+        android:layout_marginRight="10dp"
+        android:layout_marginBottom="10dp"/>
+</android.support.design.widget.CoordinatorLayout>
+```
 CoordinatorLayout 提供了两个属性用来设置 FAB 的位置：
 * layout_anchor：设置 FAB 的锚点，我们熟悉的 PopupWindow 也有类似概念。
 * layout_anchorGravity：设置相对锚点的位置，如`bottom|right`表示 FAB 位于锚点的右下角。
@@ -122,53 +123,54 @@ AppBarLayout 是一个垂直布局的 LinearLayout，它主要是为了实现 **
 巧合的是 CoordinatorLayout 已经实现了 NestedScrollingParent 接口，所以我们配合一个实现了 NestedScrollingChild 接口的 View 就可以轻松的实现以上效果。
 
 简单起见，我们使用 NestedScrollView 包裹 TextView 来实现上面的效果：
-
-    <?xml version="1.0" encoding="utf-8"?>
-    <android.support.design.widget.CoordinatorLayout
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:orientation="vertical"           
+```      
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.design.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"           
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <android.support.design.widget.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-        <android.support.design.widget.AppBarLayout
+        android:layout_height="wrap_content">
+        <TextView
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="标题"
-                android:textSize="20sp"
-                android:gravity="center"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp"
-                android:textColor="@android:color/white"
-                android:background="@color/colorPrimary"
-                app:layout_scrollFlags="scroll"/>
-        </android.support.design.widget.AppBarLayout>
+            android:layout_height="wrap_content"
+            android:text="标题"
+            android:textSize="20sp"
+            android:gravity="center"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:textColor="@android:color/white"
+            android:background="@color/colorPrimary"
+            app:layout_scrollFlags="scroll"/>
+    </android.support.design.widget.AppBarLayout>
 
-        <android.support.v4.widget.NestedScrollView
-            android:id="@+id/scrollView"
+    <android.support.v4.widget.NestedScrollView
+        android:id="@+id/scrollView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <TextView
+            android:id="@+id/tv"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            app:layout_behavior="@string/appbar_scrolling_view_behavior">
-            <TextView
-                android:id="@+id/tv"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:textSize="30sp"
-                android:gravity="center_horizontal"/>
-        </android.support.v4.widget.NestedScrollView>
-    </android.support.design.widget.CoordinatorLayout>
-
+            android:textSize="30sp"
+            android:gravity="center_horizontal"/>
+    </android.support.v4.widget.NestedScrollView>
+</android.support.design.widget.CoordinatorLayout>
+```
 1、CoordinatorLayout 中可滚动的视图（如本例中的 NestedScrollView），需要设置以下属性：
-
-    app:layout_behavior="@string/appbar_scrolling_view_behavior"
-
+```
+app:layout_behavior="@string/appbar_scrolling_view_behavior"
+```
 这个固定字符串是系统提供的，表示使用`android.support.design.widget.AppBarLayout$ScrollingViewBehavior`来处理 NestedScrollView 与 AppBarLayout 的关系，这里暂不介绍，后面会讲解。
 
 2、AppBarLayout 中的 View，如要想要滚动到屏幕外，必须设置以下属性：
-
-    app:layout_scrollFlags="scroll"
+```
+app:layout_scrollFlags="scroll"
+```
 * scroll： 隐藏的时候，先整体向上滚动，直到 AppBarLayout 完全隐藏，再开始滚动 Scrolling View；显示的时候，直到 Scrolling View 顶部完全出现后，再开始滚动 AppBarLayout 到完全显示。
 ![scroll](http://upload-images.jianshu.io/upload_images/1787010-514ebefa105c383f.gif?imageMogr2/auto-orient/strip)
   除了 scroll，还有下面几个取值，这些属性都必须与 scroll 一起使用 **“|”** 运算符。
@@ -179,16 +181,17 @@ AppBarLayout 是一个垂直布局的 LinearLayout，它主要是为了实现 **
 * enterAlwaysCollapsed：需要和 enterAlways 一起使用（`scroll|enterAlways|enterAlwaysCollapsed`），和 enterAlways 不一样的是，不会显示 AppBarLayout 到完全再滚动 Scrolling View，而是先滚动 AppBarLayout 到最小高度，再滚动 Scrolling View，最后再滚动 AppBarLayout 到完全显示。
 
   注意：需要定义 View 的最小高度（minHeight）才有效果：
-
-      android:minHeight="10dp"
-      app:layout_scrollFlags="scroll|enterAlways|enterAlwaysCollapsed"
-
+```
+android:minHeight="10dp"
+app:layout_scrollFlags="scroll|enterAlways|enterAlwaysCollapsed"
+```
 ![scroll|enterAlways|enterAlwaysCollapsed](http://upload-images.jianshu.io/upload_images/1787010-48e7ea9e488119e1.gif?imageMogr2/auto-orient/strip)
 
 * exitUntilCollapsed：顾名思义，定义了 AppBarLayout 消失的规则。发生向上滚动事件时，AppBarLayout 向上滚动退出直至最小高度（minHeight），然后 Scrolling View 开始滚动。也就是，AppBarLayout 不会完全退出屏幕。
-
-      android:minHeight="10dp"
-      app:layout_scrollFlags="scroll|exitUntilCollapsed"
+```
+android:minHeight="10dp"
+app:layout_scrollFlags="scroll|exitUntilCollapsed"
+```
 ![scroll|exitUntilCollapsed](http://upload-images.jianshu.io/upload_images/1787010-fefcea805ea09b5d.gif?imageMogr2/auto-orient/strip)
 
 enterAlwaysCollapsed 与 exitUntilCollapsed 在实际的使用中，更多的是与 CollapsingToolbarLayout 一起使用，我们继续往下看。
@@ -209,47 +212,47 @@ CollapsingToolbarLayout 继承自 FrameLayout，它是用来实现 Toolbar 的�
 所以，我们使用 Toolbar 来实现一些常见的效果吧~
 
 4.1 CollapsingToolbarLayout & enterAlwaysCollapsed
-
-    <?xml version="1.0" encoding="utf-8"?>
-    <android.support.design.widget.CoordinatorLayout     
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:orientation="vertical"
+```
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.design.widget.CoordinatorLayout     
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <android.support.design.widget.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-        <android.support.design.widget.AppBarLayout
-            android:layout_width="match_parent"
-            android:layout_height="150dp">
-            <android.support.design.widget.CollapsingToolbarLayout
-                android:id="@+id/collapsingToolbarLayout"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                app:contentScrim="@color/colorPrimary"
-                app:layout_scrollFlags="scroll|enterAlways|enterAlwaysCollapsed">
-                <android.support.v7.widget.Toolbar
-                    android:id="@+id/toolbar"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    app:layout_collapseMode="pin"
-                    android:minHeight="10dp"
-                    android:background="@color/colorPrimary"/>
-            </android.support.design.widget.CollapsingToolbarLayout>
-        </android.support.design.widget.AppBarLayout>
-
-        <android.support.v4.widget.NestedScrollView
-            android:id="@+id/scrollView"
+        android:layout_height="150dp">
+        <android.support.design.widget.CollapsingToolbarLayout
+            android:id="@+id/collapsingToolbarLayout"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            app:layout_behavior="@string/appbar_scrolling_view_behavior">
-            <TextView
-                android:id="@+id/tv"
+            app:contentScrim="@color/colorPrimary"
+            app:layout_scrollFlags="scroll|enterAlways|enterAlwaysCollapsed">
+            <android.support.v7.widget.Toolbar
+                android:id="@+id/toolbar"
                 android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:textSize="30sp"
-                android:gravity="center_horizontal"/>
-        </android.support.v4.widget.NestedScrollView>
-    </android.support.design.widget.CoordinatorLayout>
+                android:layout_height="50dp"
+                app:layout_collapseMode="pin"
+                android:minHeight="10dp"
+                android:background="@color/colorPrimary"/>
+        </android.support.design.widget.CollapsingToolbarLayout>
+    </android.support.design.widget.AppBarLayout>
 
+    <android.support.v4.widget.NestedScrollView
+        android:id="@+id/scrollView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <TextView
+            android:id="@+id/tv"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:textSize="30sp"
+            android:gravity="center_horizontal"/>
+    </android.support.v4.widget.NestedScrollView>
+</android.support.design.widget.CoordinatorLayout>
+```
 ![enterAlwaysCollapsed](http://upload-images.jianshu.io/upload_images/1787010-c23c25414c09d0d7.gif?imageMogr2/auto-orient/strip)
 
 我们将 AppBarLayout 的高度设置大一点，`app:layout_collapseMode="pin"` 确保 CollapsingToolbarLayout 折叠完成之前，Toolbar 一直固定在顶部不动。
@@ -258,63 +261,64 @@ CollapsingToolbarLayout 继承自 FrameLayout，它是用来实现 Toolbar 的�
 
 ![exitUntilCollapsed](http://upload-images.jianshu.io/upload_images/1787010-6f2546535c14d574.gif?imageMogr2/auto-orient/strip)
 修改下 CollapsingToolbarLayout 的 layout_scrollFlags：
-
-    app:layout_scrollFlags="scroll|exitUntilCollapsed"
-
+```
+app:layout_scrollFlags="scroll|exitUntilCollapsed"
+```
 4.3 parallax（视差）
 
 `layout_collapseMode`除了使用 pin 固定住 View，还可以使用 parallax，视差的意思就是：移动过程中两个 View 的位置产生了一定的视觉差异。
-
-    <?xml version="1.0" encoding="utf-8"?>
-    <android.support.design.widget.CoordinatorLayout
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:orientation="vertical"
+```
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.design.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <android.support.design.widget.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
-        <android.support.design.widget.AppBarLayout
-            android:layout_width="match_parent"
-            android:layout_height="150dp">
-            <android.support.design.widget.CollapsingToolbarLayout
-                android:id="@+id/collapsingToolbarLayout"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                app:contentScrim="@color/colorPrimary"
-                app:layout_scrollFlags="scroll|exitUntilCollapsed">
-                <ImageView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:src="@drawable/bg"
-                    android:scaleType="centerCrop"
-                    app:layout_collapseParallaxMultiplier="0.9"
-                    app:layout_collapseMode="parallax"/>
-                <android.support.v7.widget.Toolbar
-                    android:id="@+id/toolbar"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    app:layout_collapseMode="pin"/>
-            </android.support.design.widget.CollapsingToolbarLayout>
-        </android.support.design.widget.AppBarLayout>
-
-        <android.support.v4.widget.NestedScrollView
-            android:id="@+id/scrollView"
+        android:layout_height="150dp">
+        <android.support.design.widget.CollapsingToolbarLayout
+            android:id="@+id/collapsingToolbarLayout"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            app:layout_behavior="@string/appbar_scrolling_view_behavior">
-            <TextView
-                android:id="@+id/tv"
+            app:contentScrim="@color/colorPrimary"
+            app:layout_scrollFlags="scroll|exitUntilCollapsed">
+            <ImageView
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:textSize="30sp"
-                android:gravity="center_horizontal"/>
-        </android.support.v4.widget.NestedScrollView>
-    </android.support.design.widget.CoordinatorLayout>
+                android:src="@drawable/bg"
+                android:scaleType="centerCrop"
+                app:layout_collapseParallaxMultiplier="0.9"
+                app:layout_collapseMode="parallax"/>
+            <android.support.v7.widget.Toolbar
+                android:id="@+id/toolbar"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                app:layout_collapseMode="pin"/>
+        </android.support.design.widget.CollapsingToolbarLayout>
+    </android.support.design.widget.AppBarLayout>
 
+    <android.support.v4.widget.NestedScrollView
+        android:id="@+id/scrollView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+        <TextView
+            android:id="@+id/tv"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:textSize="30sp"
+            android:gravity="center_horizontal"/>
+    </android.support.v4.widget.NestedScrollView>
+</android.support.design.widget.CoordinatorLayout>
+```
 ![parallax-0.9](http://upload-images.jianshu.io/upload_images/1787010-254386294acb175c.gif?imageMogr2/auto-orient/strip)
 
 你可以设置视差因子：
-
-    app:layout_collapseParallaxMultiplier="0.9"
+```
+app:layout_collapseParallaxMultiplier="0.9"
+```
 下图是视差因子为0.1的效果：
 
 ![parallax-0.1](http://upload-images.jianshu.io/upload_images/1787010-d5ea00f29d1e404e.gif?imageMogr2/auto-orient/strip)
@@ -332,17 +336,18 @@ CollapsingToolbarLayout 继承自 FrameLayout，它是用来实现 Toolbar 的�
 CoodinatorLayout 并不知道 FloatingActionButton 和 AppBarLayout 的工作原理，我们提到过 CoodinatorLayout 实现了 NestedScrollingParent，我们通过一个实现了 NestedScrollingChild 的 scrolling view，就可以轻松的实现：滑动事件的处理与 View 之间的交互。
 
 这其中充当中间桥梁的就是 CoordinatorLayout.Behavior，比如 FloatingActionButton，查看源码发现它的类注解是这样的：
-
-    @CoordinatorLayout.DefaultBehavior(FloatingActionButton.Behavior.class)
-    public class FloatingActionButton extends VisibilityAwareImageButton {
-        // ...
-    }
+```
+@CoordinatorLayout.DefaultBehavior(FloatingActionButton.Behavior.class)
+public class FloatingActionButton extends VisibilityAwareImageButton {
+    // ...
+}
+```
 FloatingActionButton.Behavior 的主要作用就是防止被 Snackbar 盖住。
 
 自定义 View 既可以通过注解指定 Behavior，也可以通过在布局 XML 申明：
-
-    app:layout_behavior="具体Behavior的类路径"
-
+```
+app:layout_behavior="具体Behavior的类路径"
+```
 5.2 原理分析
 
 以 **“三、CoordinatorLayout 与 AppBarLayout”** 中的效果来分析：
@@ -350,56 +355,57 @@ FloatingActionButton.Behavior 的主要作用就是防止被 Snackbar 盖住。
 1. 滑动 NestedScrollView 会触发 CoodinatorLayout 的 onNestedPreScroll 方法（不知道为什么的看这篇文章：[Android NestedScrolling机制](http://www.jianshu.com/p/aff5e82f0174)）；
 
 2. onNestedPreScroll 方法会查找所有定义了 Behavior 的 View，再通过 Behavior 的 onNestedPreScroll 方法去询问每个 View 需要消耗的距离（部分源码）；
+```
+@Override
+public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
+   int xConsumed = 0;
+   int yConsumed = 0;
+   boolean accepted = false;
 
-       @Override
-       public void onNestedPreScroll(View target, int dx, int dy, int[] consumed) {
-           int xConsumed = 0;
-           int yConsumed = 0;
-           boolean accepted = false;
+   final int childCount = getChildCount();
+   for (int i = 0; i < childCount; i++) {
+       final View view = getChildAt(i);
 
-           final int childCount = getChildCount();
-           for (int i = 0; i < childCount; i++) {
-               final View view = getChildAt(i);
+       final Behavior viewBehavior = lp.getBehavior();
+       if (viewBehavior != null) {
+           mTempIntPair[0] = mTempIntPair[1] = 0;
+           viewBehavior.onNestedPreScroll(this, view, target, dx, dy, mTempIntPair);
 
-               final Behavior viewBehavior = lp.getBehavior();
-               if (viewBehavior != null) {
-                   mTempIntPair[0] = mTempIntPair[1] = 0;
-                   viewBehavior.onNestedPreScroll(this, view, target, dx, dy, mTempIntPair);
+           xConsumed = dx > 0 ? Math.max(xConsumed, mTempIntPair[0])
+                : Math.min(xConsumed, mTempIntPair[0]);
+           yConsumed = dy > 0 ? Math.max(yConsumed, mTempIntPair[1])
+                : Math.min(yConsumed, mTempIntPair[1]);
 
-                   xConsumed = dx > 0 ? Math.max(xConsumed, mTempIntPair[0])
-                        : Math.min(xConsumed, mTempIntPair[0]);
-                   yConsumed = dy > 0 ? Math.max(yConsumed, mTempIntPair[1])
-                        : Math.min(yConsumed, mTempIntPair[1]);
-
-                   accepted = true;
-               }
-           }
-
-           consumed[0] = xConsumed;
-           consumed[1] = yConsumed;
+           accepted = true;
        }
+   }
 
+   consumed[0] = xConsumed;
+   consumed[1] = yConsumed;
+}
+```
 3. NestedScrollView 的 Behavior：`AppBarLayout.ScrollingViewBehavor`，它的 onNestedPreScroll 没有做任何实现；
 
 4. 那么剩下的就是 AppBarLayout 的 Behavior：`AppBarLayout.Behavior`
-
-       @Override
-       public void onNestedPreScroll(CoordinatorLayout coordinatorLayout, AppBarLayout child,
-                View target, int dx, int dy, int[] consumed) {
-           if (dy != 0 && !mSkipNestedPreScroll) {
-               int min, max;
-               if (dy < 0) {
-                   // We're scrolling down
-                   min = -child.getTotalScrollRange();
-                   max = min + child.getDownNestedPreScrollRange();
-               } else {
-                   // We're scrolling up
-                   min = -child.getUpNestedPreScrollRange();
-                   max = 0;
-               }
-               consumed[1] = scroll(coordinatorLayout, child, dy, min, max);
-           }
+```
+@Override
+public void onNestedPreScroll(CoordinatorLayout coordinatorLayout, AppBarLayout child,
+        View target, int dx, int dy, int[] consumed) {
+   if (dy != 0 && !mSkipNestedPreScroll) {
+       int min, max;
+       if (dy < 0) {
+           // We're scrolling down
+           min = -child.getTotalScrollRange();
+           max = min + child.getDownNestedPreScrollRange();
+       } else {
+           // We're scrolling up
+           min = -child.getUpNestedPreScrollRange();
+           max = 0;
        }
+       consumed[1] = scroll(coordinatorLayout, child, dy, min, max);
+   }
+}
+```
 很好理解，我们滑动 NestedScrollView 的时候，AppBarLayout 会向上滚动，所以就需要消耗部分滚动的距离。
 
 这里，我们只是简单的分析了部分源码，有兴趣的可以自己去阅读。
@@ -434,74 +440,76 @@ FloatingActionButton.Behavior 的主要作用就是防止被 Snackbar 盖住。
 ![behavior](http://upload-images.jianshu.io/upload_images/1787010-5b5ea20e77f0465a.gif?imageMogr2/auto-orient/strip)
 
 1、首先，定义 dependency，让它可以跟随手指移动（仅部分代码）：
+```
+public class DependencyView extends Button {
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        int x = (int) event.getRawX();
+        int y = (int) event.getRawY();
+        switch (event.getAction()) {
+            case MotionEvent.ACTION_MOVE: {
+                CoordinatorLayout.MarginLayoutParams layoutParams = (CoordinatorLayout.MarginLayoutParams) getLayoutParams();
+                int left = layoutParams.leftMargin + x - lastX;
+                int top = layoutParams.topMargin + y - lastY;
 
-    public class DependencyView extends Button {
-        @Override
-        public boolean onTouchEvent(MotionEvent event) {
-            int x = (int) event.getRawX();
-            int y = (int) event.getRawY();
-            switch (event.getAction()) {
-                case MotionEvent.ACTION_MOVE: {
-                    CoordinatorLayout.MarginLayoutParams layoutParams = (CoordinatorLayout.MarginLayoutParams) getLayoutParams();
-                    int left = layoutParams.leftMargin + x - lastX;
-                    int top = layoutParams.topMargin + y - lastY;
-
-                    layoutParams.leftMargin = left;
-                    layoutParams.topMargin = top;
-                    setLayoutParams(layoutParams);
-                    requestLayout();
-                    break;
-                }
+                layoutParams.leftMargin = left;
+                layoutParams.topMargin = top;
+                setLayoutParams(layoutParams);
+                requestLayout();
+                break;
             }
-            lastX = x;
-            lastY = y;
-            return true;
         }
+        lastX = x;
+        lastY = y;
+        return true;
     }
+}
+```
 2、自定义 Behavior，让 child 跟随 dependency：
+```
+public class CusBehavior extends CoordinatorLayout.Behavior {
+    private int width;
 
-    public class CusBehavior extends CoordinatorLayout.Behavior {
-        private int width;
-
-        public CusBehavior(Context context, AttributeSet attrs) {
-            super(context, attrs);
-            DisplayMetrics display = context.getResources().getDisplayMetrics();
-            width = display.widthPixels;
-        }
-
-        @Override
-       public boolean layoutDependsOn(CoordinatorLayout parent, View child, View dependency) {
-            return dependency.getId() == R.id.dependency;
-        }
-
-        @Override
-        public boolean onDependentViewChanged(CoordinatorLayout parent, View child, View dependency) {
-            child.setY(dependency.getY() + child.getHeight());
-            return true;
-        }
+    public CusBehavior(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        DisplayMetrics display = context.getResources().getDisplayMetrics();
+        width = display.widthPixels;
     }
+
+    @Override
+   public boolean layoutDependsOn(CoordinatorLayout parent, View child, View dependency) {
+        return dependency.getId() == R.id.dependency;
+    }
+
+    @Override
+    public boolean onDependentViewChanged(CoordinatorLayout parent, View child, View dependency) {
+        child.setY(dependency.getY() + child.getHeight());
+        return true;
+    }
+}
+```
 3、使用 Behavior：
-
-    <?xml version="1.0" encoding="utf-8"?>
-    <android.support.design.widget.CoordinatorLayout     
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:tools="http://schemas.android.com/tools"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
-        <Button
-            android:id="@+id/child"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:layout_behavior="android.coordinatorlayoutdemo.CusBehavior"
-            android:text="Child" />
-        <android.coordinatorlayoutdemo.DependencyView
-            android:id="@+id/dependency"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Dependency" />
-    </android.support.design.widget.CoordinatorLayout>
-
+```
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.design.widget.CoordinatorLayout     
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <Button
+        android:id="@+id/child"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_behavior="android.coordinatorlayoutdemo.CusBehavior"
+        android:text="Child" />
+    <android.coordinatorlayoutdemo.DependencyView
+        android:id="@+id/dependency"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Dependency" />
+</android.support.design.widget.CoordinatorLayout>
+```
 是不是很简单？
 
 其实 FloatingActionButton 示例中：layout_anchor 使用某个 View 作为锚点，就是用了这个原理，具体可以参考：FloatingActionButton.Behavior 。
