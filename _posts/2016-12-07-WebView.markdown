@@ -1,0 +1,315 @@
+---
+layout:     post
+title:      "聊一聊 WebView 与 JS 交互方案 - 适用 Android & iOS"
+subtitle:   ""
+date:       2016-12-07 12:00:00
+author:     "zhuhf"
+header-img: ""
+header-mask: 0.3
+catalog:    true
+tags:
+    - Android
+    - iOS
+    - WebView
+    - JS
+---
+
+
+
+**webview 与 JS 交互分为两种：**
+* Android & iOS 调用 JS 的方法
+* JS 调用 Android & iOS 的方法
+
+----
+
+**Android & iOS 调用 JS 的方法，伪代码如下：**
+
+* Android
+```
+webView.loadUrl("javascript:show('xxx');");
+```
+* iOS
+```
+NSString *result = [self.webView stringByEvaluatingJavaScriptFromString:@"showReturn('xxx');"];
+```
+
+webview 调用 JS 的方法比较简单，`show('xxx')` 方法是 JS 中定义的一个方法：
+```
+<script language=javascript>
+   function show(str) {
+      alert(str);
+   }
+
+   function showReturn(str) {
+      return "result";
+   }
+</script>
+```
+这种方式，缺陷很明显：
+1. Android 没法拿到返回值；但是，iOS是可以拿到返回值的，这是最重要的区别！！！另外，我们也无法传递一个回调接口`Callback`用于回调，也就是说此方法调用成功与否，是无法知道的。
+
+2. `show`方法必须是 JS 中存在的，即使不存在你调用了也不会报错；另外，随着业务的增长，我们不得不增加许许多多类似`show`的方法，来处理其他业务。
+
+**JS 调用 Android & iOS 的方法，伪代码如下：**
+* Android
+  ```
+  private class JsToNative {
+    // 没有返回结果        
+    @JavascriptInterface
+    public void jsMethod(String paramFromJS) {
+
+    }
+
+    // 有返回结果
+    @JavascriptInterface
+    public String jsMethodReturn(String paramFromJS) {
+       return "your result";
+    }
+  }
+
+  // JsToNative就是一个别名，你可以随意
+  webView.addJavascriptInterface(new JsToNative(), "JsToNative");
+  ```
+JS 调用 Android
+  ```
+  // 没有返回结果
+  var paramFromJS = "xxx";
+  window.JsToNative.jsMethod(paramFromJS);
+
+  // 有返回结果
+  var returnResult = window.JsToNative.jsMethodReturn(paramFromJS);
+  ```
+* iOS
+两种方式：
+  * JS 里面直接调用方法
+  * JS 里面通过对象调用方法
+
+
+  方式一：JS 里面直接调用方法
+  ```
+  - (void)webViewDidFinishLoad:(UIWebView *)webView {
+      JSContext *context = [webView valueForKeyPath:@"documentView.webView.mainFrame.javaScriptContext"];
+      context[@"jsMethod"] = ^() { 
+          NSArray *args = [JSContext currentArguments];  
+              for (id obj in args) {  
+                  NSLog(@"%@",obj);  
+              } 
+      }
+
+      context[@"jsMethodReturn"] = ^() { 
+          return "your result";
+      }
+  }
+  ```
+  JS 调用 iOS
+  ```
+  // 没有返回结果
+  var paramFromJS = "xxx";
+  jsMethod(paramFromJS);
+
+  // 有返回结果
+  var returnResult = jsMethodReturn(paramFromJS);
+  ```
+
+  方式二：JS 里面通过对象调用方法
+
+  这种方式需要使用到 JSExport 协议，类似Android的 @JavascriptInterface 注解。
+
+  由于篇幅原因，这里不做详细讲解，感兴趣的同学可以参考：[这里](http://blog.iderzheng.com/ios7-objects-management-in-javascriptcore-framework/)。
+
+小结：
+1. JS 都可以从 Android 和 iOS 方法拿到返回值，不存在Android 调用 JS 无法拿到返回值的情况。
+2. 弊端和前面类似，JS 事先需要知道 Android 和 iOS 的方法名（参数等）；另外，随着业务的增长，我们不得不增加更多的方法，来处理其他业务。
+
+**思考：**
+1. 如何避免 JS、Android、iOS 相互调用时，需要事先“约定”方法名称和参数？
+2. 原生调用 JS 方法，能否类似原生开发一样，使用   `Callback（block）`  做为回调方式？
+3. JS 调用原生能否使用 `function` 获得返回值?
+
+## iOS/OSX - WebViewJavascriptBridge
+
+这是[marcuswestin](https://github.com/marcuswestin)公司开源的一个用于 iOS/OSX 平台 webview 与 JS 通信的方案，它在 webview 和 JS 之间“架了”一座桥梁，提供了非常便捷的通信方式，引用官方的介绍：
+> An iOS/OSX bridge for sending messages between Obj-C and JavaScript in UIWebViews/WebViews
+
+此项目的**star**数量达到**7600+**，可见受欢迎程度非常高，而且据说还有很多大公司的项目在使用，包括：
+* [Facebook Messenger](https://www.facebook.com/mobile/messenger)
+* [Facebook Paper](https://facebook.com/paper)
+* [Yardsale](http://www.getyardsale.com/)
+* [EverTrue](http://www.evertrue.com/)
+* [Game Insight](http://www.game-insight.com/)
+* [Sush.io](http://www.sush.io/)
+* [Imbed](http://imbed.github.io/)
+* [CareZone](https://carezone.com/)
+* [Hemlig](http://www.hemlig.co/)
+* [Altralogica](http://www.altralogica.it/)
+* [鼎盛中华](https://itunes.apple.com/us/app/ding-sheng-zhong-hua/id537273940?mt=8)
+* [FRIL](https://fril.jp/)
+* [留白·WHITE](http://liubaiapp.com/)
+* [BrowZine](http://thirdiron.com/browzine/)
+
+这个开源项目的用法也非常简单，简单的示例如下：
+
+1. 注册handler
+
+    Obj-C中注册handler，给JS调用：
+```
+self.bridge = [WebViewJavascriptBridge bridgeForWebView:webView];
+[self.bridge registerHandler:@"testObjcCallback" handler:^(id data, WVJBResponseCallback   responseCallback) {
+  // 收到JS的调用
+  NSLog(@"testObjcCallback called: %@", data);
+  // 回调结果给JS
+  responseCallback(@"Response from testObjcCallback");
+}];
+```
+  JS中注册handler，给Obj-C调用（JS代码）：
+```
+bridge.registerHandler('testJavascriptHandler', function(data, responseCallback) {
+  // 收到Obj-C的调用
+  log('ObjC called testJavascriptHandler with', data)
+  var responseData = { 'Javascript Says':'Right back atcha!' }
+  log('JS responding with', responseData)
+  // 回调结果给Obj-C
+  responseCallback(responseData)
+})
+```
+2. 根据第一步注册的`handler`，发送消息
+第一步注册的`handler`有两个：`testObjcCallback`和`testJavascriptHandler`
+
+    Obj-C调用JS：
+```
+[self.bridge callHandler:@"testJavascriptHandler" data:data responseCallback:^(id response) {
+  NSLog(@"testJavascriptHandler responded: %@", response);
+}];
+```
+  JS调用Obj-C：
+```
+bridge.callHandler('testObjcCallback', {'foo': 'bar'}, function(response) {
+  log('JS got response', response)
+})
+```
+
+使用起来很简单，主要就是使用`registerHandler`来注册`callback（block）`，然后使用`callHandler`来调用注册的`callback（block）`。
+
+Obj-C与JS互调，传递数据的格式为String，建议使用JSON格式，这样更易于数据的交互。
+
+>关于WebViewJavascriptBridge更多详细的配置和用法，[请看这里](https://github.com/marcuswestin/WebViewJavascriptBridge)。
+
+iOS/OSX平台有这样的Obj-C与JS交互方案，如果Android平台也有类似的方案，岂不是更加完美？
+
+## Android - JsBridge
+
+感谢开源的力量，已经有人给出了类似的解决方案：
+
+hi大头鬼hi（lzyzsd），微博地址：http://weibo.com/brucefromsdu
+JsBridge 开源地址：https://github.com/lzyzsd/JsBridge
+
+> 据作者描述，是从[JsBridge](https://github.com/jacin1/JsBridge)和微信的jsBridge file改造而来，加了一些新特性和修复了一些bug。
+
+阅读完整个开源项目之后，我惊讶的发现，关于 **jsBridge** 的设计居然和上文介绍的 **WebViewJavascriptBridge** 几乎一模一样。
+
+唯一，也是最明显的一个区别，就是为了解决我们本文开始遇到的问题：
+>Android & iOS 调用 JS 的方法 - Android 没法拿到返回值；但是，iOS是可以拿到返回值的。
+
+为了解决这个问题，作者使用了 **webview url** 自定义的 **schema** ，然后截取数据并拦截请求。
+
+**jsBridge** 差异部分，关键代码如下：
+* iOS - jsBridge
+```
+function _fetchQueue() {
+    var messageQueueString = JSON.stringify(sendMessageQueue);
+    sendMessageQueue = [];
+    return messageQueueString;
+}
+```
+* Android - jsBridge
+```
+function _fetchQueue() {      
+    var messageQueueString = JSON.stringify(sendMessageQueue);        
+    sendMessageQueue = [];    
+    // return messageQueueString;        
+    // Android无法直接返回数据, 这是与iOS最大的区别; 所以, 需要使用自定义url形式返回数据。     
+    messagingIframe.src = CUSTOM_PROTOCOL_SCHEME + '://return/_fetchQueue/' + encodeURIComponent(messageQueueString);   
+}
+```
+另外，**jsBridge** 的“加载时机”也有所不同，差异代码如下：
+* iOS - WebViewJavascriptBridge
+```
+function setupWebViewJavascriptBridge(callback) {
+    if (window.WebViewJavascriptBridge) { return callback(WebViewJavascriptBridge); }
+    if (window.WVJBCallbacks) { return window.WVJBCallbacks.push(callback); }
+    window.WVJBCallbacks = [callback];
+    var WVJBIframe = document.createElement('iframe');
+    WVJBIframe.style.display = 'none';
+    WVJBIframe.src = 'wvjbscheme://__BRIDGE_LOADED__';
+    document.documentElement.appendChild(WVJBIframe);
+    setTimeout(function() { document.documentElement.removeChild(WVJBIframe) }, 0)
+}
+```
+iOS中，需要在你的web页面的JS脚本中执行这么一段方法，然后在UIWebView的代理方法`shouldStartLoadWithRequest`拦截`wvjbscheme://__BRIDGE_LOADED__`类型的URL，然后加载 jsBridge：
+![iOS - jsBridge.png](http://upload-images.jianshu.io/upload_images/1787010-3ba6192c14c299a0.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+* Android - JsBridge
+而Android中，不需要在web页面引入那段JS方法；只需要在WebViewClient的`onPageFinished`方法中加载 jsBridge：
+
+![Android - jsBridge.png](http://upload-images.jianshu.io/upload_images/1787010-984f949ca06a4c4a.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+很明显，Android 和 iOS 不同的平台需要在 web 页面引入的内容有所不一样；这样，会导致 web 页面开发人员需要根据不同的平台分别处理。
+
+既然，我们的初衷是想找到 Android 和 iOS 平台同时都适用的方案，就必须解决这个问题。
+
+**为此，我改造了 大头鬼 的JsBridge库**，Android 使用了和 iOS - WebViewJavascriptBridge 的一致的 jsBridge 文件，唯一修改的方法是`_fetchQueue()`，正如前面提到的，为了解决：
+> Android & iOS 调用 JS 的方法 - Android 没法拿到返回值；但是，iOS是可以拿到返回值的。
+
+同时，需要和 iOS 一样，在 web 页面执行一段 JS 方法。其他使用方式基本保持不变，这里感谢 大头鬼 的代码。
+
+**本来是从fork过来的代码，但是改动比较多，所以就不提交给原作者了。**
+
+基本使用步骤和iOS的保持高度一致，简单示例如下：
+
+1. 注册handler
+
+    Android中注册handler，给JS调用：
+```
+webView = (BridgeWebView) findViewById(R.id.webView);
+webView.registerHandler("testObjcCallback", new BridgeHandler() {
+      @Override
+      public void handler(String data, CallBackFunction function) {
+      Log.i(TAG, "testObjcCallback called: " + data);
+         function.onCallBack("Response from testObjcCallback");
+      }
+});
+```
+    JS中注册handler，给Android调用（JS代码）：
+```
+bridge.registerHandler('testJavascriptHandler', function(data, responseCallback) {
+      log('ObjC called testJavascriptHandler with', data)
+      var responseData = { 'Javascript Says':'Right back atcha!' }
+      log('JS responding with', responseData)  
+      responseCallback(responseData)
+})
+```
+2. 根据第一步注册的`handler`，发送消息
+第一步注册的`handler`有两个：`testObjcCallback`和`testJavascriptHandler`
+
+    Android调用JS：
+```
+webView.callHandler("testJavascriptHandler", "{\"foo\":\"before ready\"}", new CallBackFunction() {
+      @Override
+      public void onCallBack(String data) {
+
+      }
+});
+```
+    JS调用Android：
+```
+bridge.callHandler('testObjcCallback', {'foo': 'bar'}, function(response) {
+      log('JS got response', response)
+})
+```
+>关于JsBridge更多详细的配置和用法，[请看这里](https://github.com/hiphonezhu/JsBridge)。
+
+有了这样的两个库，可以很方便的让我们在Android和iOS平台与JS交互时，使用一致的通信方案，较少了前端同学很多的适配工作。同时，也更符合原生的开发习惯，并且忽略 jsBridge 层的存在。
+
+最后，附上两个库的地址
+- 改造后的JsBridge库: [JsBridge](https://github.com/hiphonezhu/JsBridge)
+- iOS/OSX - WebViewJavascriptBridge库: [WebViewJavascriptBridge](https://github.com/marcuswestin/WebViewJavascriptBridge)

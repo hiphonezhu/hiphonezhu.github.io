@@ -4,7 +4,7 @@ title:      "CoordinatorLayout 完全解析"
 subtitle:   ""
 date:       2017-02-09 12:00:00
 author:     "zhuhf"
-header-img: "img/post-bg-nextgen-web-pwa.jpg"
+header-img: ""
 header-mask: 0.3
 catalog:    true
 tags:

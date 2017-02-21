@@ -1,0 +1,713 @@
+---
+layout:     post
+title:      "AOP 之 AspectJ 全面剖析 in Android"
+subtitle:   ""
+date:       2017-01-22 12:00:00
+author:     "zhuhf"
+header-img: ""
+header-mask: 0.3
+catalog:    true
+tags:
+    - Android
+    - AOP
+    - AspectJ
+---
+
+
+
+AspectJ 是 Android 平台上一种比较高效和简单的实现 AOP 技术的方案。
+
+相类似的方案有以下几种：
+* [AspectJ](https://eclipse.org/aspectj/)： 一个 JavaTM 语言的面向切面编程的无缝扩展（适用Android）。
+
+* [Javassist for Android](https://github.com/crimsonwoods/javassist-android) ：用于字节码操作的知名 java 类库 Javassist 的 Android 平台移植版。
+
+* [DexMaker](https://code.google.com/p/dexmaker/) ：Dalvik 虚拟机上，在编译期或者运行时生成代码的 Java API。
+
+* [ASMDEX](http://asm.ow2.org/asmdex-index.html) ：一个类似 ASM 的字节码操作库，运行在Android平台，操作Dex字节码。
+
+## AOP 是什么
+
+>在软件业，AOP为Aspect Oriented Programming的缩写，意为：[面向切面编程](http://baike.baidu.com/view/1865230.htm)，通过[预编译](http://baike.baidu.com/view/176610.htm)方式和运行期动态代理实现程序功能的统一维护的一种技术。AOP是[OOP](http://baike.baidu.com/view/63596.htm)的延续，是软件开发中的一个热点，也是[Spring](http://baike.baidu.com/view/23023.htm)框架中的一个重要内容，是[函数式编程](http://baike.baidu.com/view/1711147.htm)的一种衍生范型。利用AOP可以对业务逻辑的各个部分进行隔离，从而使得业务逻辑各部分之间的[耦合度](http://baike.baidu.com/view/1599212.htm)降低，提高程序的可重用性，同时提高了开发的效率。
+
+------以上解释来自[百度百科](http://baike.baidu.com/link?url=-e9UKUHGZnOBAetnpe7B4rueDS0gPF6WuVcHU51d_fVder1I67Msoje9uuc5edi3fgqJhaP-Z6yjgu4Lxvl9Xa)。
+
+简单的来讲，AOP是一种：可以在不改变原来代码的基础上，通过“**动态注入**”代码，来改变原来执行结果的技术。
+
+## AOP 能做什么
+* 日志
+* 持久化
+* 性能监控
+* 数据校验
+* 缓存
+* [其他更多](http://en.wikipedia.org/wiki/Cross-cutting_concern)
+
+## AspectJ 术语
+* JPoint：代码可注入的点，比如一个方法的调用处或者方法内部、“读、写”变量等。
+* Pointcut：用来描述 JPoint 注入点的一段表达式，比如：调用 Animal 类 fly 方法的地方，call(* Animal.fly(..))。
+* Advice：常见的有 Before、After、Around 等，表示代码执行前、执行后、替换目标代码，也就是在 Pointcut 何处注入代码。
+* Aspect：Pointcut 和 Advice 合在一起称作 Aspect。
+
+## 引入 AspectJ
+
+`app/build.grade`加入以下配置项：
+
+    ...
+    import org.aspectj.bridge.IMessage
+    import org.aspectj.bridge.MessageHandler
+    import org.aspectj.tools.ajc.Main
+
+    buildscript {
+        repositories {
+            mavenCentral()
+        }
+        dependencies {
+            classpath 'org.aspectj:aspectjtools:1.8.1'
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    android {
+        ...
+    }
+
+    dependencies {
+        ...
+        compile 'org.aspectj:aspectjrt:1.8.1'
+    }
+
+    final def log = project.logger
+    final def variants = project.android.applicationVariants
+
+    variants.all { variant ->
+        if (!variant.buildType.isDebuggable()) {
+            log.debug("Skipping non-debuggable build type '${variant.buildType.name}'.")
+            return;
+        }
+
+        JavaCompile javaCompile = variant.javaCompile
+        javaCompile.doLast {
+            String[] args = ["-showWeaveInfo",
+                         "-1.5",
+                         "-inpath", javaCompile.destinationDir.toString(),
+                         "-aspectpath", javaCompile.classpath.asPath,
+                         "-d", javaCompile.destinationDir.toString(),
+                         "-classpath", javaCompile.classpath.asPath,
+                         "-bootclasspath", project.android.bootClasspath.join(File.pathSeparator)]
+            log.debug "ajc args: " + Arrays.toString(args)
+
+            MessageHandler handler = new MessageHandler(true);
+            new Main().run(args, handler);
+            for (IMessage message : handler.getMessages(null, true)) {
+               switch (message.getKind()) {
+                    case IMessage.ABORT:
+                    case IMessage.ERROR:
+                    case IMessage.FAIL:
+                        log.error message.message, message.thrown
+                        break;
+                    case IMessage.WARNING:
+                        log.warn message.message, message.thrown
+                        break;
+                    case IMessage.INFO:
+                        log.info message.message, message.thrown
+                        break;
+                    case IMessage.DEBUG:
+                        log.debug message.message, message.thrown
+                        break;
+                }
+            }
+        }
+    }
+
+## AspectJ 语法
+
+AspectJ 的使用相对来说还是有点复杂，所以我整理了一份参考手册来方便查阅，以下是贴图，为了方便使用，文章最后会给出 pdf 版的下载地址。
+
+JPoint 的分类和对应的 Pointcut 如下：
+![1-1](http://upload-images.jianshu.io/upload_images/1787010-ad867955b97996e0.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+Pointcut 中的 Signature 参考：
+
+
+![1-2](http://upload-images.jianshu.io/upload_images/1787010-826bc659e29d4063.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+以上的 Signature 都是由一段表达式组成，且每个关键词之间都有“空格”，下面是对关键词的解释：
+
+![1-3](http://upload-images.jianshu.io/upload_images/1787010-05c4dd97edf10421.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+Pointcut 语法熟悉了之后，Advice 就显得很简单了，它包含以下几个：
+
+
+![1-4](http://upload-images.jianshu.io/upload_images/1787010-2e74c3b6641d985b.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+
+![高级用法](http://upload-images.jianshu.io/upload_images/1787010-fe1f90f50376cbb1.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+
+有了以上参考手册，我们来看看如何使用吧~
+
+## 开始使用
+
+### 一、Method -> call
+
+定义一个 Animal 类，包含一个 fly 方法：
+
+    public class Animal {
+        private static final String TAG = "Animal";
+        public void fly() {
+            Log.e(TAG, this.toString() + "#fly");
+        }
+    }
+
+在调用 fly 的地方，之前插入一段代码：
+
+    @Aspect
+    public class MethodAspect {
+        private static final String TAG = "ConstructorAspect";
+
+        @Pointcut("call(* android.aspectjdemo.animal.Animal.fly(..))")
+        public void callMethod() {}
+
+        @Before("callMethod()")
+        public void beforeMethodCall(JoinPoint joinPoint) {
+            Log.e(TAG, "before->" + joinPoint.getTarget().toString() + "#" + joinPoint.getSignature().getName());
+        }
+    }
+
+使用 @Pointcut 来注解方法，定义具体的 Pointcut ，call(MethodSignature) 关键字表示方法被调用，MethodSignature 的定义参考 1-2、1-3表格。
+
+
+![MethodSignature](http://upload-images.jianshu.io/upload_images/1787010-da37c31c4212a0a7.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+
+调用 fly 之前插入一段代码，所以 Advice 需要使用 @Before，@Before 的参数就是 使用@Pointcut 注解的方法名称。
+
+当然，你也可以合并 Pointcut 和 Advice，像这样：
+
+    @Aspect
+    public class MethodAspect {
+        private static final String TAG = "MethodAspect";
+
+        @Before("call(* android.aspectjdemo.animal.Animal.fly(..))")
+        public void beforeMethodCall(JoinPoint joinPoint) {
+            Log.e(TAG, "before->" + joinPoint.getTarget().toString() + "#" + joinPoint.getSignature().getName());
+        }
+    }
+
+最后，就是在 MethodAspect 加上 @Aspect 注解，这样 AspectJ 在编译时会查找被 @Aspect  注解的 `class`，然后 AOP 的过程会自动完成。
+
+编译运行之后，可以在 `app/build/intermediates/classes/debug` 目录查看编译后的 `class` 文件：
+
+    ...
+    Animal animal = new Animal();
+    JoinPoint var5 = Factory.makeJP(ajc$tjp_0, this, animal);
+    MethodAspect.aspectOf().beforeMethodCall(var5);
+    animal.fly();
+    ...
+
+`animal.fly()` 之前插入了一段代码，调用就是 `MethodAspect#beforeMethodCall` 方法，查看 logcat 输出：
+
+
+![beforeMethodCall](http://upload-images.jianshu.io/upload_images/1787010-c7375c45919e163e.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+如果使用 @After 类型的 Advice，则会在`animal.fly()` 之后插入：
+
+    ...
+    Animal animal = new Animal();
+    Animal var6 = animal;
+    JoinPoint var5 = Factory.makeJP(ajc$tjp_0, this, animal);
+
+    try {
+        var6.fly();
+    } catch (Throwable var9) {
+        MethodAspect.aspectOf().afterMethodCall(var5);
+        throw var9;
+    }
+
+    MethodAspect.aspectOf().afterMethodCall(var5);
+    ...
+
+我们来看一下 @Around 类型的 Advice，它会替换原先的执行代码：
+
+
+    /**
+     * 不能和Before、After一起使用
+     * @param joinPoint
+     * @throws Throwable
+     */
+    @Around("call(* android.aspectjdemo.animal.Animal.fly(..))")
+    public void aroundMethodCall(ProceedingJoinPoint joinPoint) throws Throwable {
+        Log.e(TAG, "around->" + joinPoint.getTarget().toString() + "#" + joinPoint.getSignature().getName());
+
+        // 执行原代码
+        joinPoint.proceed();
+    }
+
+@Around 不能和 @Before、@After 一起使用，如果不小心这样用了，你会发现没有任何效果。
+
+@Around 会替换原先执行的代码，但如果你仍然希望执行原先的代码，可以使用`joinPoint.proceed()`。
+
+### 二、Method -> execution
+
+与 call 类似，只不过执行点(JPoint)在方法内部，比如：我们希望在 fly 方法的`Log.e(TAG, this.toString() + "#fly") `这段代码执行前，插入一段代码：
+
+    @Aspect
+    public class MethodAspect {
+        private static final String TAG = "MethodAspect";
+
+        @Before("execution(* android.aspectjdemo.animal.Animal.fly(..))")
+        public void beforeMethodExecution(JoinPoint joinPoint) {
+            Log.e(TAG, "before->" + joinPoint.getTarget().toString() + "#" + joinPoint.getSignature().getName());
+       }
+    }
+
+execution 关键字表示方法执行内部，编译后 `class` 文件如下：
+
+    public void fly() {
+        JoinPoint var1 = Factory.makeJP(ajc$tjp_1, this, this);
+        MethodAspect.aspectOf().beforeMethodExecution(var1);
+        Log.e("Animal", this.toString() + "#fly");
+    }
+
+logcat 输出如下：
+
+![beforeMethodExecution](http://upload-images.jianshu.io/upload_images/1787010-5c0a783934608f35.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+@After 和 @Around 这里就不做演示了，和 Method -> call 中讲解的类似，只不过是在 fly 方法内部。
+
+### 三、Constructor -> call & execution
+
+Constructor 和 Method 几乎一模一样，最大的区别就在 Signature，如下表：
+![Constructor & Method -> Signature](http://upload-images.jianshu.io/upload_images/1787010-365352abd6f36fa0.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+
+Constructor 没有返回值类型，且函数名只能是 new，一个示例如下：
+
+    @Aspect
+    public class ConstructorAspect {
+        private static final String TAG = "ConstructorAspect";
+
+        @Before("execution(android.aspectjdemo.animal.Animal.new(..))")
+        public void beforeConstructorExecution(JoinPoint joinPoint) {
+            Log.e(TAG, "before->" + joinPoint.getThis().toString() + "#" + joinPoint.getSignature().getName());
+        }
+    }
+
+### 四、Field -> get
+
+语法概要：
+![FieldSignature](http://upload-images.jianshu.io/upload_images/1787010-34c7a389d3d14492.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+Animal 包含年龄`age`属性、返回`age`的`getAge`方法：
+
+
+    public class Animal {
+        private static final String TAG = "Animal";
+        private int age;
+
+        public Animal() {
+            this.age = 10;
+        }
+
+        public int getAge() {
+            Log.e(TAG, "getAge: ");
+            return this.age;
+        }
+    }
+
+比如，我们希望不管怎么修改`age`的值，最后获取的`age`都为100，那么就需要替换访问`age`的代码：
+
+    @Aspect
+    public class FieldAspect {
+        private static final String TAG = "FieldAspect";
+
+        @Around("get(int android.aspectjdemo.animal.Animal.age)")
+        public int aroundFieldGet(ProceedingJoinPoint joinPoint) throws Throwable {
+           // 执行原代码
+           Object obj = joinPoint.proceed();
+           int age = Integer.parseInt(obj.toString());
+           Log.e(TAG, "age: " + age);
+           return 100;
+       }
+    }
+
+这样，`animal.getAge()`返回的值一定是100：
+
+    Animal animal = new Animal();
+    int age = animal.getAge();
+    Log.e(TAG, "true age: " + age);
+
+logcat 输出如下：
+
+![aroundFieldGet](http://upload-images.jianshu.io/upload_images/1787010-344b68ae53169909.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+同时看下编译后的`class`：
+
+    public int getAge() {
+        Log.e(TAG, "getAge: ");
+        JoinPoint var2 = Factory.makeJP(ajc$tjp_2, this, this);
+        FieldAspect var10000 = FieldAspect.aspectOf();
+        Object[] var3 = new Object[]{this, this, var2};
+        return var10000.aroundFieldGet((new Animal$AjcClosure3(var3)).linkClosureAndJoinPoint(4112));
+    }
+
+可以看到，原先的`this.age`已经被替换成调用`FieldAspect#aroundFieldGet`方法了。
+
+### 五、Field -> set & withincode
+
+与 get 对应的是 set：表示修改某个属性，比如`setAge`方法中的`this.age = age`：
+
+    public class Animal {
+        private static final String TAG = "Animal";
+        private int age;
+
+        public Animal() {
+            this.age = 10;
+        }
+
+        public void setAge(int age) {
+            Log.e(TAG, "setAge: ");
+            this.age = age;
+        }
+    }
+
+假如我们希望替换这段代码，让调用方无法改变`age`：
+
+    @Aspect
+    public class FieldAspect {
+        private static final String TAG = "FieldAspect";
+
+        @Around("set(int android.aspectjdemo.animal.Animal.age)")
+        public void aroundFieldSet(ProceedingJoinPoint joinPoint) throws Throwable {
+            Log.e(TAG, "around->" + joinPoint.getTarget().toString() + "#" + joinPoint.getSignature().getName());
+        }
+    }
+
+编译后的`class`：
+
+    public class Animal {
+        private static final String TAG = "Animal";
+        private int age;
+
+        public Animal() {
+            Log.e("Animal", "Animal构造函数");
+            byte var1 = 10;
+            JoinPoint var3 = Factory.makeJP(ajc$tjp_0, this, this, Conversions.intObject(var1));
+            FieldAspect var10000 = FieldAspect.aspectOf();
+            Object[] var4 = new Object[]{this, this, Conversions.intObject(var1), var3};
+            var10000.aroundFieldSet((new Animal$AjcClosure1(var4)).linkClosureAndJoinPoint(4112));
+        }
+
+        public void setAge(int age) {
+            Log.e("Animal", "setAge: ");
+            JoinPoint var4 = Factory.makeJP(ajc$tjp_3, this, this, Conversions.intObject(age));
+            FieldAspect var10000 = FieldAspect.aspectOf();
+            Object[] var5 = new Object[]{this, this, Conversions.intObject(age), var4};
+            var10000.aroundFieldSet((new Animal$AjcClosure5(var5)).linkClosureAndJoinPoint(4112));
+        }
+    }
+
+我们发现，`setAge`方法中的`this.age = age`的确被替换了，但是原先构造函数初始化`age`的代码：`this.age = 10`也被替换了。
+
+这时候，就需要使用**withincode**关键字了。
+
+### 六、withincode
+
+语法概要：
+
+![withincode](http://upload-images.jianshu.io/upload_images/1787010-dd436f47d3ac7871.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+比如，我们要排除 Animal 的构造函数修改`age`的 JPoint，可以这样写：
+
+    @Aspect
+    public class FieldAspect {
+        private static final String TAG = "FieldAspect";
+
+        @Around("set(int android.aspectjdemo.animal.Animal.age) && !withincode(android.aspectjdemo.animal..*.new(..))")
+        public void aroundFieldSet(ProceedingJoinPoint joinPoint) throws Throwable {
+            Log.e(TAG, "around->" + joinPoint.getTarget().toString() + "#" + joinPoint.getSignature().getName());
+        }
+    }
+
+Pointcut 多个条件使用`&&`、`||`运算符连接，`!`表示否的意思。
+
+再看一下编译后的`class`，构造函数中的 JPoint 已经被排除：
+
+    public class Animal {
+        private static final String TAG = "Animal";
+        private int age;
+
+        public Animal() {
+            Log.e("Animal", "Animal构造函数");
+            this.age = 10;
+        }
+
+        public void setAge(int age) {
+            Log.e("Animal", "setAge: ");
+            JoinPoint var4 = Factory.makeJP(ajc$tjp_3, this, this, Conversions.intObject(age));
+            FieldAspect var10000 = FieldAspect.aspectOf();
+            Object[] var5 = new Object[]{this, this, Conversions.intObject(age), var4};
+            var10000.aroundFieldSet((new Animal$AjcClosure5(var5)).linkClosureAndJoinPoint(4112));
+        }
+    }
+
+### 七、staticinitialization
+
+语法概要：
+
+![staticinitialization](http://upload-images.jianshu.io/upload_images/1787010-9bc3a032167abbcc.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+TypeSignature 语法：
+![TypeSignature](http://upload-images.jianshu.io/upload_images/1787010-036a55d7f1bf9e86.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+JPoint 为`static`块初始化内：
+
+    public class Animal {
+        private static final String TAG = "Animal";
+
+        static {
+            Log.e(TAG, "static block");
+        }
+    }
+
+如果要在`static`块初始化之前，插入代码：
+
+    @Aspect
+    public class StaticInitializationAspect {
+        private static final String TAG = "StaticAspect";
+
+        @Before("staticinitialization(android.aspectjdemo.animal.Animal)")
+        public void beforeStaticBlock(JoinPoint joinPoint) {
+            Log.d(TAG, "beforeStaticBlock: ");
+        }
+    }
+
+编译后的`class`：
+
+    public class Animal {
+        private static final String TAG = "Animal";
+
+        static {
+            ajc$preClinit();
+            JoinPoint var0 = Factory.makeJP(ajc$tjp_3, (Object)null, (Object)null);
+            StaticInitializationAspect.aspectOf().beforeStaticBlock(var0);
+            Log.e("Animal", "static block");
+        }
+    }
+
+### 八、handler
+
+用来匹配 catch 的异常，比如 Animal 的 hurt 方法：
+
+    public class Animal {
+        public void hurt(){
+            try {
+                int i = 4 / 0;
+            } catch (ArithmeticException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+如果我们需要统计所有出现`ArithmeticException`的点，则可以使用 handler：
+
+    @Aspect
+    public class MethodAspect {
+        private static final String TAG = "MethodAspect";
+        /**
+         * handler
+         * 不支持@After、@Around
+         */
+        @Before("handler(java.lang.ArithmeticException)")
+        public void handler() {
+            Log.e(TAG, "handler");
+        }
+    }
+
+注意 handler 不支持 @After 与 @Around，且异常只支持编译时匹配，也就是`handler(java.lang.Exception)`无法匹配`java.lang.ArithmeticException`，虽然`ArithmeticException`继承自`Exception`。
+
+### 九、Advice 之 @AfterThrowing
+
+@AfterThrowing 属于 @After 的变种，方法的结束包括两种状态：**正常结束**和**异常退出**。
+
+我们经常需要收集**抛出异常**的方法信息，这时候可以使用 @AfterThrowing。
+
+比如 Animal 的`hurtThrows`会抛出`java.lang.ArithmeticException`异常：
+
+    public class Animal {
+        public void hurtThrows(){
+            int i = 4 / 0;
+        }
+    }
+
+我们可以这样收集异常：
+
+    @Aspect
+    public class MethodAspect {
+        private static final String TAG = "MethodAspect";
+
+        @AfterThrowing(pointcut = "call(* *..*(..))", throwing = "throwable")
+        public void anyFuncThrows(Throwable throwable) {
+            Log.e(TAG, "hurtThrows: ", throwable);
+        }
+    }
+
+`call(* *..*(..))`表示任意类的任意方法，被调用的 JPoint。
+
+`throwing = "throwable" `描述了异常参数的名称，也就是`anyFuncThrows`方法中的参数`throwable`。
+
+你可以通过 **Throwable** 收集方法调用栈的信息，这里就不做过多讲解了。
+
+这里，需要强调几点：
+1、@AfterThrowing 不支持 Field -> get & set，一般用在 Method 和 Constructor，其他暂时没测试过；
+2、捕获的是**抛出异常**的方法，即使这个方法的**调用方**已经处理了此异常，比如：
+
+    try {
+        animal.hurtThrows();
+    } catch (Exception e) {}
+
+即使这样，`MethodAspect#anyFuncThrows`也会被触发。
+
+接下来，我们看下方法**正常结束**的情况。
+
+### 十、Advice 之 @AfterReturning & args
+
+这里讲的**正常结束**，指的是有返回值的方法。
+
+假如 Animal 有两个`getHeight`方法：
+
+    public class Animal {
+        public int getHeight() {
+            return 0;
+        }
+
+        public int getHeight(int sex) {
+            switch (sex) {
+                case 0:
+                    return 163;
+                case 1:
+                    return 173;
+            }
+            return 173;
+        }
+    }
+
+我们想要拿到 getHeight 的返回值，做一些其他事情（比如，数据统计、缓存等），可以这样做：
+
+    @Aspect
+    public class MethodAspect {
+        private static final String TAG = "MethodAspect";
+
+        @AfterReturning(pointcut = "execution(* android.aspectjdemo.animal.Animal.getHeight(..))", returning = "height")
+        public void getHeight(int height) {
+            Log.d(TAG, "getHeight: " + height);
+        }
+    }
+
+如果你调用`animal.getHeight()`，此方法会得到0；
+如果你调用`animal.getHeight(0)`，此方法会得到163。
+
+如果你只对`getHeight(int sex)`感兴趣，有两种做法：
+
+1、Pointcut 中表示任意参数的 .. 改为 int
+
+    @AfterReturning(pointcut = "execution(* android.aspectjdemo.animal.Animal.getHeight(int))", returning = "height")
+
+2、 && args(int)
+
+    @AfterReturning(pointcut = "execution(* android.aspectjdemo.animal.Animal.getHeight(..)) && args(int)", returning = "height")
+
+![args](http://upload-images.jianshu.io/upload_images/1787010-6d958ff3a92cb6cc.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+## 举个高级栗子
+
+这里介绍一个在实际项目中，经常碰到的一个问题：Android M 6.0+ 之后危险权限需要动态申请。
+
+如果有一些老的项目需要适配，一般做法是去修改原有的代码，比如我们有一个启动相机拍照的方法：
+
+    public void camera() {
+        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(new File(getExternalCacheDir() + "photo.jpg")));
+        startActivity(intent);
+    }
+
+可能需要这么改：
+
+    Utils.requestPermisson(this, Manifest.permission.CAMERA).callback(new Callback(){
+        public void onGranted(){
+            camera();
+        }
+        public void onDenied() {}
+    });
+
+如果你封装了请求权限工具类，这样改看起来也没什么问题，无非就是把所有类似的地方都加上这个段申请权限的代码。
+
+如果没有封装，只能是更痛苦。如果使用 AspectJ，可以通过一行注解，解决所有需要需要申请权限的方法。
+
+### 一、定义注解
+
+    @Retention(RetentionPolicy.RUNTIME)
+    @Target(ElementType.METHOD)
+    public @interface MPermisson {
+        String value();
+    }
+
+`value`表示要申请的权限名称，比如`Manifest.permission.CAMERA`。
+
+### 二、编写 Aspect
+
+    @Aspect
+    public class PermissonAspect {
+        @Around("execution(@android.aspectjdemo.MPermisson * *(..)) && @annotation(permisson)")
+        public void checkPermisson(final ProceedingJoinPoint joinPoint, MPermisson permisson) throws Throwable {
+            // 权限
+            String permissonStr = permisson.value();
+            // 正常需要使用维护的栈顶Activity作为上下文，这里为了演示需要
+            MainActivity mainActivity = (MainActivity) joinPoint.getThis();          // 权限申请
+
+            Utils.requestPermisson(mainActivity, Manifest.permission.CAMERA).callback(new Callback(){
+                public void onGranted(){
+                    try {
+                        // 继续执行原方法
+                        joinPoint.proceed();
+                    } catch (Throwable throwable) {
+                        throwable.printStackTrace();
+                    }
+                }
+                public void onDenied() {}
+          });
+       }
+    }
+
+`@annotation(permisson)`用来表示`permisson`参数是注解类型。
+
+### 三、使用 @MPermisson
+
+在需要申请权限的方法上加上@MPermisson注解，其它代码不用做修改：
+
+    @MPermisson(value = Manifest.permission.CAMERA)
+    public void camera() {
+        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        intent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(new File(getExternalCacheDir() + "photo.jpg")));
+        startActivity(intent);
+    }
+
+如果你项目中有其他地方，也需要申请权限，只需要在涉及到权限的方法上加上`@MPermisson(value = "你的权限")`即可。
+
+## 写在最后
+
+以上介绍的内容，基本上已经涵盖了 AspectJ 所有常用的方法。
+
+剩余的几个用法，比如`adviceexecution()、within(TypePattern)、cflow(pointcuts)、cflowbelow(pointcuts)、this(Type)、target(Type)`等，读者可以自行尝试以下，篇幅原因不做细谈。
+
+或者参考文章最后给出的 Demo 源码，这个 Demo 包含了本文演示的所有示例。
+Demo 地址：[AspectJDemo](https://github.com/hiphonezhu/Android-Demos/tree/master/AspectJDemo)
+AspectJ 参考手册：[AspectJ.pdf](https://github.com/hiphonezhu/Android-Demos/blob/master/AspectJDemo/AspectJ.pdf)
+
+----
+春节将至，希望已经回家的、没回家的和正在回家路上的你都能过一个开开心心的好年。
+
+最后，预祝大家在新的一年里：**身体健康，龙马精神，事业有成，步步高升**。
