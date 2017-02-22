@@ -1,0 +1,379 @@
+---
+layout:     post
+title:      "Jenkins一键发布「apk&ipa」 到Bugly"
+subtitle:   ""
+date:       2016-11-24 12:00:00
+author:     "zhuhf"
+header-img: ""
+header-mask: 0.3
+catalog:    true
+tags:
+    - Android
+    - iOS
+    - Jenkins
+---
+
+
+
+## 背景
+
+一大早刚到公司没多久，测试妹妹小韩跑过来：“老王，麻烦给我发一份xxx项目的最新安装包呗？”
+
+老王：“啥，昨天不是发你一个了吗？”
+
+小韩：“我要回归下昨天已解决的bug，所以~”
+
+于是，老王蹭蹭蹭打开IDE，N分钟后一个安装包通过QQ扔给了小韩。五分钟后，小韩又跑过来了
+
+小韩：“昨天你关闭的xxx bug好像没解决吧，我操作给你看下~”
+
+老王放下手中的山东煎饼，盯着小韩的操作看了一遍。
+
+老王：“不科学哇，我昨天肯定解决了，你装的是我刚发给你的吗？”
+
+小韩：“肯定是啊，我刚卸载了重新按装的。。。”
+
+老王：“难道是接口出问题了？你等下，我调试下。。。”
+
+老王：“fuck，我用的正式环境的接口。。。稍等下，我一会儿再给你一个。”
+
+N分钟之后，测试小韩终于告诉老王昨天的那个bug没问题了~
+
+然后，小韩又跑去找iOS开发小李去了。。。此处省略500字~
+
+## 反思
+
+上面这个小故事，相信在不少公司都会存在。在测试阶段，测试人员在不断测试和回归的过程中，会和开发人员沟通，期间可能会发布N个安装包。
+
+一般情况下，都是开发直接打包，然后发给测试人员。测试人员此时处于一个被动地位，只能被动的接受开发给的安装包，然后去做相关测试。
+
+另外，打包对于开发来讲，可能觉得没啥技术含量的事情，夹杂着情绪去做事情迟早也会出纰漏。
+
+## Jenkins
+
+Jenkins是一个持续集成工具，它可以在设定的某个时间点（或者代码有更新等情况）自动去构建安装包，同时可以将安装包上传到第三方平台，比如：[Bugly](https://bugly.qq.com/v2/beta/)、[蒲公英](https://www.pgyer.com/)，这样测试人员可以通过微信、QQ扫一扫直接安装（Bugly的链接可以直接在微信内打开，这是我选择它的原因）。
+
+当然，如果你需要，也可以将构建的结果（成功、失败），通过Email发送给相关人员，以便及时发现问题。
+
+那么下面我们讲解如何使用Jenkins构建Android和iOS安装包，并自动上传Bugly平台吧~
+
+## 软件环境
+1. Mac OS X EI Capitan
+2. Jenkins 2.19.3
+3. Tomcat
+4. AndroidStudio & Gradle等Android开发环境
+5. Xcode & 企业证书
+
+#### Jenkins安装
+
+打开[Jenkins官网](https://jenkins.io/index.html)，选择“Download Jenkins”
+
+
+![Jenkins](http://upload-images.jianshu.io/upload_images/1787010-933061df5aba0a36.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+选择左侧的“LTS Release”相对稳定的版本，我们看到Jenkins提供了很多平台的支持。
+
+我是Mac环境，一般很多人都会去选择Mac OS X，直接选择这个可以省去Tomcat的安装。但经过我反复的实践，选择安装包安装的话，会生成一个Jenkins用户，后续的工作空间会在这个用户下，我遇到了各种文件夹权限问题，如果你去授予了读写权限，又会遇到Jenkins打不开的问题了~
+
+所以，后来我直接放弃了，虽然网上有各种办法，可能他们的版本比较旧。最后，受到高人指点，我直接下载了.war文件，知道的朋友应该明白，这个文件是直接放在Tomcat下webapps下，然后你就可以使用了，它的权限就是当前用户，所以就不存在问题了~
+
+所以下载好.war文件之后，我们就开始安装Tomcat吧。
+
+#### Tomcat安装
+下载地址：http://tomcat.apache.org/download-70.cgi
+
+![Tomcat安装](http://upload-images.jianshu.io/upload_images/1787010-4bd9764bda65e5fc.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+选择zip压缩文件，下载完成后解压缩到你的目录，我放在`/Users/hiphonezhu/Desktop/D/software/apache-tomcat-8.5.8`，
+
+然后，把上面一步下载好的Jenkins.war放到``apache-tomcat-8.5.8/webapps``目录下。
+
+#### 运行Jenkins
+
+命令行进入Tomcat安装目录bin文件夹下，执行如下命令：
+
+
+    $ cd /Users/hiphonezhu/Desktop/D/software/apache-tomcat-8.5.8/bin
+    $ startup.sh
+
+![运行Jenkins](http://upload-images.jianshu.io/upload_images/1787010-3a3726d101a94378.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+打开浏览器，输入http://localhost:8080/， 看到这个页面表示Tomcat启动成功了
+
+
+
+![Manager Apps](http://upload-images.jianshu.io/upload_images/1787010-08ea6e8975c17a9c.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+点击“Manager Apps”，会提示输入用户名和密码，Tomcat默认是没有用户名和密码的，那怎么办呢？
+
+我们点击取消，会出现这个页面：
+
+![401登录提示](http://upload-images.jianshu.io/upload_images/1787010-5ada7de04ac94be4.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+它提示我们在``conf/tomcat-users.xml``文件中可以配置用户，打开文件，在最后加入用户：
+
+![conf/tomcat-users.xml](http://upload-images.jianshu.io/upload_images/1787010-94424d606160aec9.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+重新启动Tomcat：
+
+    $ cd /Users/hiphonezhu/Desktop/D/software/apache-tomcat-8.5.8/bin
+    $ shutdown.sh
+    $ startup.sh
+
+再次点击“Manager Apps”，输入用户名和密码，进入Tomcat管理界面：
+
+![Tomcat管理界面](http://upload-images.jianshu.io/upload_images/1787010-ee440fa88c55e3f6.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+如果你刚刚下载了``Jenkins.war``并放到了``apache-tomcat-8.5.8/webapps``目录下，此时会看到``/jenkins``这个应用，如上图红色区域，点击我们就打开Jenkins了。
+
+#### 安装Jenkins插件
+
+初次打开Jenkins会提示你输入密码，按照提示找到文件并打开，然后填入密码即可，这里不贴图了。
+
+然后会提示你安装插件，我们首先选择推荐安装推荐的插件。经过漫长的等待，我们终于进去Jenkins管理界面了
+
+![Jenkins管理界面](http://upload-images.jianshu.io/upload_images/1787010-d1c69e86c25d98c5.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+选择“Manager Jenkins”，进入设置界面
+
+![Manage Plugins](http://upload-images.jianshu.io/upload_images/1787010-16d9c3298cdcace4.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+选择“Manage Plugins”进入插件管理界面
+
+![Install Plugins](http://upload-images.jianshu.io/upload_images/1787010-5bcbfcd854b89a2c.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+我们额外需要安装的插件有：
+1. Git
+2. Gradle
+2. Xcode
+
+因为我的代码托管在自建的gitblit上，所以源码管理工具选择了Git。如果你的代码放在Github上，还需安装GitHub插件。
+
+当然，如果你使用SVN，那么还需安装SVN相关插件，这里不做更多介绍。
+
+### 新增构建项目（通用）
+
+回到Jenkins主页，点击“New Item”
+
+![New Item](http://upload-images.jianshu.io/upload_images/1787010-82575164595ed65e.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+输入项目名称，点击“OK”，进入配置界面
+
+![Source Code Management](http://upload-images.jianshu.io/upload_images/1787010-d08c30958f9b7a29.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+选择“Source Code Management”，设置Git的地址``ssh://zhuhfxxxxxxxxx``，选择认证方式“Credentials”，点击“Add”
+
+![Credentials](http://upload-images.jianshu.io/upload_images/1787010-f5ac4d9585223d25.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+我们选择“SSH Username with private key”认证方式，“Username”随意填写，只是Jenkins的存储的用户而已。
+
+“Private Key”就是“SSH Key”，首先你要在本地生成一对“私钥”和“公钥”，然后把公钥填到你的源码管理库里面去，这里的key填写的是私钥，不熟悉的朋友可以参考这篇文章：[如何SHH key给GITHUB](http://jingyan.baidu.com/article/a65957f4f0acc624e67f9bc1.html)
+
+设置成功后，选择你刚刚填写的用户，如果认证成功，则没有提示，如果失败下图红色区域会出现红色错误提示(写本篇文章的时候，尝试填写错误的居然不提示了，我发誓一开始我输错了确实提示了~)：
+
+![认证失败](http://upload-images.jianshu.io/upload_images/1787010-9aef869406b0e2dc.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+设置构建条件
+
+![Paste_Image.png](http://upload-images.jianshu.io/upload_images/1787010-09a2dde7ee9e975f.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+经常用到的是以下两个：
+
+Build periodically：周期进行项目构建（它不care源码是否发生变化）。
+
+Poll SCM：定时检查源码变更（根据SCM软件的版本号），如果有更新就checkout最新code下来，然后执行构建动作。
+
+参数配置参考：
+
+[http://blog.csdn.net/xueyingqi/article/details/53216506](http://blog.csdn.net/xueyingqi/article/details/53216506)
+[http://blog.csdn.net/yezicjj/article/details/52763700](http://blog.csdn.net/yezicjj/article/details/52763700)
+
+通用的设置介绍完了，下面我们介绍Android和iOS不同的构建参数设置。
+
+#### Android构建
+
+![Build](http://upload-images.jianshu.io/upload_images/1787010-93c2132126e33169.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+Build选择“Add build step”，因为Android使用Gradle打包的，所以我们选择“Invoke Gradle script”。
+
+![Gradle](http://upload-images.jianshu.io/upload_images/1787010-11c8c851c41d6c09.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+正常情况下，只需要设置Tasks的参数。
+
+Tasks的参数其实就是``./gradlew xxx``后面的参数，比如我们填写的``assembleDebug``，最终执行的命令就是：
+
+    $ ./gradlew assembleDebug
+
+表示最终打包出来的是Debug版本，这个和你在AndroidStudio中使用命令行打包是一个道理，我们可以使用
+
+    $ ./gradlew tasks
+
+来查看你的项目可以执行的任务
+
+![tasks](http://upload-images.jianshu.io/upload_images/1787010-f1ea37d2f8aaddd6.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+如果你的项目在命令行使用
+
+    $ ./gradlew assembleDebug
+    $ ./gradlew assembleRelease
+
+或者其他命令（多个productFlavors）可以正常打包，那么Jenkins也是可以正常打包的。
+
+这里需要说明的是，如果你需要打Release包，那么你的app/build.gradle文件中需要有签名的配置：
+
+![signing config](http://upload-images.jianshu.io/upload_images/1787010-f1d33ca743803113.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+配置完成后，点击“Save”按钮，回到你新建的项目。主动构建，点击“Build Now”
+
+
+![Build Now](http://upload-images.jianshu.io/upload_images/1787010-9d99cb250cd6ddb0.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+在“Build History”中：
+
+1. 正在构建的会显示当前构建的进度；
+2. 如果最后显示蓝色的表示构建成功；
+3. 红色表示构建失败；
+4. 灰色表示构建被终止，可能是用户主动点击了“x”号。
+
+选择某一次构建记录，点击“Console Output”，可以查看构建的过程
+![Build Detail](http://upload-images.jianshu.io/upload_images/1787010-fd028dbbfc329ec7.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+成功情况，最后你会看到“BUILD SUCCESSFUL”字样
+![Build Successful](http://upload-images.jianshu.io/upload_images/1787010-1ec0e91eff2e123b.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+最终apk的输出目录，和我们用AS开发一致，在``app/build/outputs/apk``文件夹中：
+
+![Apk](http://upload-images.jianshu.io/upload_images/1787010-818b8802ee97d778.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+Android的构建，我们暂且到此，自动上传至Bugly平台因为Android和iOS基本是类似的，所以会在文章最后统一讲解。
+
+下面我们来看下iOS的构建步骤吧~
+
+#### iOS构建
+
+![Xcode](http://upload-images.jianshu.io/upload_images/1787010-538bb4967a6a148a.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+Build选择“Add build step”，选择“Xcode”
+
+![General build settings](http://upload-images.jianshu.io/upload_images/1787010-0258b945e5ceab43.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+这里有一点需要说明，因为会影响到下面的配置。
+
+以前我们在使用第三方库的时候，一般都是手动下载到本地，然后加入到项目中。
+
+现在很多项目都是用CocoaPods来管理第三方库，这个和Android的Gradle非常类似，可以方便的安装和升级使用第三方库。
+
+不使用CocoaPods，你的项目文件是xxx.xcodeproj，使用之后我们要通过xxx.xcworkspace来打开项目，这个非常重要，直接影响了我们接下来的配置。
+
+如果你没使用CocoaPods，那么Target这一项，需要填写你项目的Target，也就是下图红色区域的文字：
+
+![Target](http://upload-images.jianshu.io/upload_images/1787010-f1e0673b08b8446e.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+如果你使用了CocoaPods，那么这一项请留空，我们会在后面的scheme中填写。
+
+记住：target和project一起使用，scheme和workspace配套使用，更多信息请查看[workspace, project, target, scheme 解析](https://segmentfault.com/a/1190000003101065)。
+
+我们继续，点击“General build settings”中的“Settings...”按钮，展开更多选项：
+![General build settings-Settings...](http://upload-images.jianshu.io/upload_images/1787010-c820070a51378cbb.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+1. 我们将“Clean before build?”打钩，build之前清理一下，总归保险一点，有时候清理下，问题就没了~
+2. Configuration有两个值，“Debug”和“Release”，这个和Xcode “Edit Scheme”中的“Build Configuration”的值一致：
+
+![Edit Scheme](http://upload-images.jianshu.io/upload_images/1787010-8a7ab02683a67214.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+![Build Configuration](http://upload-images.jianshu.io/upload_images/1787010-b30810242b716d3e.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+Debug和Release最多的用途，还是用于测试环境和正式环境不同的配置，比如常用的接口API的地址：
+
+![API](http://upload-images.jianshu.io/upload_images/1787010-f3e535f4aba94732.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+它与发布AppStore或者第三方平台内测，没有太多直接的关系。
+
+ipa命令规则：
+
+![Pack](http://upload-images.jianshu.io/upload_images/1787010-876d5083a8955910.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+“Pack application and build .ipa?”，选择打钩，表示需要生成ipa文件。
+1. .ipa filename pattern，ipa文件的命名规则，如果不填写默认规则是：target-version-build，例如xxx-1.0.0-2.ipa。
+
+    你可以使用 ${VERSION} 、${BUILD_DATE} (yyyy.MM.dd)等系统的值来组合最终的名称，也可以像红色区域一样，写一个固定的名称。
+
+    注意：这里不需要填写.ipa后缀，Jenkins会自动帮我们加上的。
+
+2. Output directory，建议不清楚的不要填写，它表示ipa输出目录，是一个相对路径，相对于**CONFIGURATION_BUILD_DIR**这个默认的Build目录或者你修改之后的Build目录；
+
+3. Manifest Plist URL，打ipa包的时候可以直接生成plist文件，它的plist的url填写成你的服务的地址，这个地址加上文件名就组成了可下载ipa包的https服务地址url。这个plist url中jenkins会自动后面加上ipa文件名。
+
+    如果你用的自己的HTTPS服务器，来提供Ad Hoc或者In-House类型的ipa包发布，那么这里可以填写你的服务器地址（现在要权威机构颁发的证书才能使用，自建的https无法访问）。
+
+    因为我们使用bugly作为分发平台，所以这里就不配置了，有兴趣的自行搜索下~
+
+Code signing & OS X Keychain options
+![Code signing](http://upload-images.jianshu.io/upload_images/1787010-6cee53b855d8a161.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+1. Change bundle ID?，用于动态修改bundle ID，你需要指定新的bundle ID和plist文件的路径。一般情况不用修改，有时候测试包和正式包需要共存，这里可以修改下；
+2. Code Signing Identity，用于签名的证书名称，如果开发或者发布证书不是你创建的，让创建者导出p12和mobileprovision文件给你，安装p12之后，打开钥匙串，把证书的名字复制填入即可
+![Paste_Image.png](http://upload-images.jianshu.io/upload_images/1787010-4d00b9f49bf00be9.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+这里涉及到iOS签名证书的制作和生成，不是本文讨论的重点，不懂的同学可以参考文章最后的链接。
+3. Sign IPA at build time，表示对编译的时候对IPA包签名，不打勾的话执行xcrun命令的时候，不会加上--sign 参数，这据说是Xcode的一个bug~
+4. Embedded Profile，这个是填写mobileprovision描述文件的完整路径。
+
+Code Signing Identity和Embedded Profile这两个空都可以不填，这样会使用Xcode中的配置，如下图：
+
+![Code Signing Identity & Embedded Profile](http://upload-images.jianshu.io/upload_images/1787010-dc9222202dedd9f8.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+Unlock Keychain
+![Unlock Keychain?](http://upload-images.jianshu.io/upload_images/1787010-d16c041682b06857.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+IPA签名的时候，需要你的Mac电脑当前登录的用户授予权限。保守起见，建议打钩；并在“Keychain password”中，输入Mac电脑当前用户登录的密码。（测试下来，使用war包方式，此项不勾选也是ok的~）
+
+Advanced Xcode build options
+![Advanced Xcode build options](http://upload-images.jianshu.io/upload_images/1787010-bdad14202781109b.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+1. Xcode Schema File，如果你使用workspace而不是project此项必填，与target类似，填写你需要构建的schema；
+2. Xcode Workspace File，.xcworkspace文件的路径，$WORKSPACE表示的是当前项目的路径，"/"后面就是.xcworkspace后缀的文件名，注意：这里不需要填写后缀；
+3. Build output directory，
+系统默认的Build目录是**CONFIGURATION_BUILD_DIR**，我们上文提到的ipa包的输出目录，其实就是相对于这个目录的路径；建议填写，比如我们填写的$WORKSPACE/jenkins-build，上文ipa的“Output directory”填写ipa，那么最终编译输出的文件和ipa包的目录结构如下：
+
+![build & ipa](http://upload-images.jianshu.io/upload_images/1787010-53e758eb95e1c25e.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+点击“Save”，保存我们的配置，我们来尝试构建一下。
+
+选择某一次构建记录，点击“Console Output”，查看构建的过程：
+
+![Console Output](http://upload-images.jianshu.io/upload_images/1787010-71062446cd677284.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+红色区域可以看到，ipa成功打包出来了，路径和我们上面一张图的目录结构一致。
+
+至此，iOS的配置也结束了。下面我们重点讲解下，如何上传「apk&ipa」到第三方分发平台Bugly~
+
+## 上传Bugly
+1. 打开Bugly[官网](https://bugly.qq.com/v2/beta/)，注册完成后，新建一个项目：
+![Bugly](http://upload-images.jianshu.io/upload_images/1787010-0d374956eaed681e.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+填写完基本信息后，选择平台，然后保存。
+
+  >注意：Android和iOS不能用同一个产品，否则下文执行上传命令，即使参数正确，也会提示“文件上传成功，但版本创建失败！”
+
+2. 选择第一步创建的产品，打开“产品设置”页面：
+![产品设置](http://upload-images.jianshu.io/upload_images/1787010-ec77afababe2f2d0.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+我们要使用App ID 和 App Key这两个参数。
+
+3. 打开之前在Jenkins创建的项目，选择“Configure”来修改配置项：
+  选择Build，“Add build step”新增一个脚本“Execute shell”
+![Execute shell](http://upload-images.jianshu.io/upload_images/1787010-a956ceacbc4b82ff.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+输入脚本
+![Shell](http://upload-images.jianshu.io/upload_images/1787010-77b807a4c33454f2.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+具体如下：
+
+       cd $WORKSPACE/jenkins-build/ipa
+       curl —-insecure -F "file=@xxx.ipa" -F "app_id=xxx" -F "pid=2" -F "title=xxx" -F "description=xxx" https://api.bugly.qq.com/beta/apiv1/exp?app_key=xxx
+
+     cd $WORKSPACE/jenkins-build/ipa，表示进入ipa输出文件夹；
+     curl xxx，curl是一个命令，百度百科解释如下：
+>curl是利用[URL](http://baike.baidu.com/view/1496.htm)语法在命令行方式下工作的开源文件传输工具。它被广泛应用在[Unix](http://baike.baidu.com/view/8095.htm)、多种[Linux](http://baike.baidu.com/view/1634.htm)发行版中，并且有[DOS](http://baike.baidu.com/subview/365/7971327.htm)和[Win32](http://baike.baidu.com/view/270236.htm)、Win64下的移植版本。
+
+    具体的参数的解释：
+![curl](http://upload-images.jianshu.io/upload_images/1787010-d6ccfcb74b9476f1.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+更多参数可以参考：[Bugly官方文档](https://bugly.qq.com/docs/user-guide/api-beta/?v=20161115111521)
+
+4. 上传成功之后，我们再次打开“Console Output”查看构建日志：
+![Paste_Image.png](http://upload-images.jianshu.io/upload_images/1787010-78d90fbd24f3e704.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+可以看到已经成功上传到Bugly了，
+![内测分发](http://upload-images.jianshu.io/upload_images/1787010-ac753a920038434f.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+点击“下载”安装包，或者打开“预览”界面，通过微信、QQ扫一扫来安装
+![扫一扫](http://upload-images.jianshu.io/upload_images/1787010-b14112b8b58fdae3.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+
+相信，写到这里，测试妹子小韩一定很开心的笑了，以后不需要再去找“隔壁老王”了。。。
+
+也许你跟着本文的步骤，还是会出现各种问题，你的环境或者配置错误都可能是引起的原因。有问题的同学可以先搜索下，一般都能找到解决办法，如果还是不能解决，可以给我留言~
+
+## 参考文章
+
+Jenkins:
+
+[http://www.tuicool.com/articles/7Z3aYna](http://www.tuicool.com/articles/7Z3aYna)
+[http://blog.csdn.net/wyb199026/article/details/52225345](http://blog.csdn.net/wyb199026/article/details/52225345)
+[http://blog.csdn.net/youtk21ai/article/details/48719807](http://blog.csdn.net/youtk21ai/article/details/48719807)
+
+iOS打包:
+
+[http://www.cnblogs.com/zengshuilin/p/5771401.html](http://www.cnblogs.com/zengshuilin/p/5771401.html)
+[http://www.cnblogs.com/tangyuanby2/p/5848230.html](http://www.cnblogs.com/tangyuanby2/p/5848230.html)
+[http://www.cnblogs.com/wangbinios/p/5709386.html](http://www.cnblogs.com/wangbinios/p/5709386.html)
+[http://blog.csdn.net/he_jiabin/article/details/49275191](http://blog.csdn.net/he_jiabin/article/details/49275191)
