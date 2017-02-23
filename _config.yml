@@ -55,8 +55,6 @@ kramdown:
 # Share component is depend on Comment so we can NOT use share only.
 #duoshuo_share: true                     # set to false if you want to use Comment without Sharing
 
-# uyan
-uyan_uid: 2125984
 
 
 # Analytics settings
