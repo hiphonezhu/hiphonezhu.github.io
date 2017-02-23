@@ -1,0 +1,492 @@
+---
+layout:     post
+title:      "Retrofit2源码分析"
+subtitle:   ""
+date:       2016-10-14 12:00:00
+author:     "zhuhf"
+header-img: ""
+header-mask: 0.3
+catalog:    true
+tags:
+    - Android
+    - Retrofit2
+---
+
+## 前言
+>本文将顺着**构建请求对象->构建请求接口->发起同步/异步请求**的流程，分析Retrofit是如何实现的。
+
+开始之前，我们先看下Retrofit的基本使用方式
+
+Step1：
+
+    public interface GitHubService {
+      @GET("users/{user}/repos")
+      Call<List<Repo>> listRepos(@Path("user") String user);
+    }
+
+Step2：
+
+    Retrofit retrofit = new Retrofit.Builder()
+        .baseUrl("https://api.github.com/")
+        .addConverterFactory(GsonConverterFactory.create()) // json response
+        .build();
+
+    GitHubService service = retrofit.create(GitHubService.class);
+
+Step3：
+
+    Call<List<Repo>> repos = service.listRepos("octocat");
+
+    // async（异步方式）
+    repos.enqueue(new Callback<List<Repo>>() {
+        @Override
+        public void onResponse(Call<List<Repo>> call, Response<List<Repo>> response) {
+            if (response.isSuccessful()) { // successful response
+                List<Repo> repos = response.body(); // converted response
+            }
+        }
+
+        @Override
+        public void onFailure(Call<List<Repo>> call, Throwable t) {}
+    });
+
+通过以上三步，可以将服务器返回的json格式数据，转换为List<Repo>。
+
+是不是非常的简单和清晰？我们似乎只写了一个```GitHubService```接口，定义了一个```listRepos```方法并加了一些**注解**，然后使用**Retrofit**的```create```方法拿到```GitHubService```实例```service```，再调用```listRepos```方法就拿到了我们想要的数据。
+
+好奇心驱使我弄明白这一切的来龙去脉~
+
+## 构建Retrofit
+Step2 我们可以看出来Retrofit使用了**建造者模式**来创建，Retrofit有几个重要的属性
+
+    public final class Retrofit {
+      // ServiceMethod缓存，ServiceMethod其实是封装了调用listRepos时，请求的所有信息（请求方法GET、请求参数名称和值、请求地址等）
+      private final Map<Method, ServiceMethod> serviceMethodCache = new LinkedHashMap<>();
+
+      // 发起网络请求库
+      private final okhttp3.Call.Factory callFactory; // 默认是OkHttpClient
+      private final HttpUrl baseUrl; // 请求地址，不能为空
+      private final List<Converter.Factory> converterFactories; // 转换器的工厂集合
+      private final List<CallAdapter.Factory> adapterFactories; // 将返回结果包装成默认的Call<?>或者RxJava的Observable（默认内置ExecutorCallAdapterFactory）
+      private final Executor callbackExecutor; // 负责控制回调结果所在的线程，Android默认是在主线程（MainThreadExecutor）
+      ...
+    }
+
+以上这些属性会在Retrofit.Builder的```build```方法中去设置，其中会有些默认的属性
+
+    public static final class Builder {
+      // ...
+      Builder(Platform platform) {
+        this.platform = platform;
+        // Add the built-in converter factory first. This prevents overriding its behavior but also
+        // ensures correct behavior when using converters that consume all types.
+        converterFactories.add(new BuiltInConverters());
+      }
+      // ...
+      public Retrofit build() {
+        if (baseUrl == null) {
+          throw new IllegalStateException("Base URL required.");
+        }
+
+        okhttp3.Call.Factory callFactory = this.callFactory;
+        if (callFactory == null) {
+          callFactory = new OkHttpClient();
+        }
+
+        Executor callbackExecutor = this.callbackExecutor;
+        if (callbackExecutor == null) {
+          callbackExecutor = platform.defaultCallbackExecutor();
+        }
+
+        // Make a defensive copy of the adapters and add the default Call adapter.
+        List<CallAdapter.Factory> adapterFactories = new ArrayList<>(this.adapterFactories);
+        adapterFactories.add(platform.defaultCallAdapterFactory(callbackExecutor));
+
+        // Make a defensive copy of the converters.
+        List<Converter.Factory> converterFactories = new ArrayList<>(this.converterFactories);
+
+        return new Retrofit(callFactory, baseUrl, converterFactories, adapterFactories,
+          callbackExecutor, validateEagerly);
+      }
+    }
+
+1. ``baseUrl``如果为空会抛出异常“Base URL required”，所以这个参数不能为空。
+2. ``callFactory``如果不指定，则使用默认的``OkHttpClient``来作为网络库。
+3. ``callbackExecutor``如果为空，会根据不同平台Platform来设置，Android默认用的是下面这个``MainThreadExecutor``。它的作用就是线程调度器，会控制最终回调结果所在的线程。
+4. ``adapterFactories``首先会添加我们自定义的**适配器工厂**，然后会加上系统内置的```ExecutorCallAdapterFactory```。这与**第三点**是一致的，都是根据不同平台来设置，Android平台如下：
+
+       static class Android extends Platform {
+        @Override public Executor defaultCallbackExecutor() {
+          return new MainThreadExecutor();
+        }
+
+        @Override CallAdapter.Factory defaultCallAdapterFactory(Executor callbackExecutor) {
+          return new ExecutorCallAdapterFactory(callbackExecutor);
+        }
+
+        static class MainThreadExecutor implements Executor {
+          private final Handler handler = new Handler(Looper.getMainLooper());
+
+          @Override public void execute(Runnable r) {
+            handler.post(r);
+          }
+        }
+       }
+
+      ``adapterFactories``集合中的``CallAdapter.Factory``是一个非常重要的概念，它会将请求的对象转换为``Call<?>``(默认，然后使用``enqueue``执行异步)；如果你使用了**RxJava**，它会转换为``Observable``，你可以使用**RxJava**的链式调用来处理请求与响应。
+
+      ``CallAdapter.Factory``有时间会继续做进一步的讲解~
+5. ``converterFactories``集合用来存储**转换器工厂**，在**Retrofit.Builder**的构造函数中，会添加默认的```BuiltInConverters```。Converter.Factory的作用有两个：
+
+       public interface Converter<F, T> {
+          T convert(F value) throws IOException;
+          abstract class Factory {
+            // 响应数据转换为ResponseBody
+            public Converter<ResponseBody, ?> responseBodyConverter(Type type, Annotation[] annotations, Retrofit retrofit) {
+              return null;
+            }
+
+            // 请求数据转换为RequestBody，常用于body
+            public Converter<?, RequestBody> requestBodyConverter(Type type, Annotation[] parameterAnnotations, Annotation[] methodAnnotations, Retrofit retrofit) {
+              return null;
+            }
+
+            // 请求数据转换为String，常用于Header、Field、Query
+            public Converter<?, String> stringConverter(Type type, Annotation[] annotations, Retrofit retrofit) {
+              return null;
+            }
+          }
+       }
+
+      * RequestBody包含了contentType、contentLength以及**“请求数据”**等。
+      * ResponseBody包含了contentType、contentLength以及**“响应数据”**等。
+
+      如果你使用了GsonConverterFactory，那么看起来是这样的
+
+        public final class GsonConverterFactory extends Converter.Factory {
+          // ...
+          @Override
+          public Converter<ResponseBody, ?> responseBodyConverter(Type type, Annotation[] annotations,
+              Retrofit retrofit) {
+            TypeAdapter<?> adapter = gson.getAdapter(TypeToken.get(type));
+            return new GsonResponseBodyConverter<>(gson, adapter);
+          }
+          // ...
+        }
+      返回的GsonResponseBodyConverter，最终会使用convert方法，将服务器返回的数据转换为方法的返回类型
+
+       final class GsonResponseBodyConverter<T> implements Converter<ResponseBody, T> {
+          private final TypeAdapter<T> adapter; // Call<T>或者Observable<T>中的T的转换适配器
+          // ...
+
+          // 将ResponseBody转换为T
+          @Override public T convert(ResponseBody value) throws IOException {
+            JsonReader jsonReader = gson.newJsonReader(value.charStream());
+            try {
+              return adapter.read(jsonReader);
+            } finally {
+              value.close();
+            }
+          }
+       }
+
+      我们已经分析完了Retrofit以及内部几个重要属性的创建过程，并且介绍了属性的很多关键方法的作用。接下来，我们介绍Retrofit是如何使用这些属性完成我们的工作的。
+
+----
+## 构建Retrofit Service
+**Step2**中，创建完**Retrofit**后，我们通过以下代码获得**GitHubService**的对象``service``：
+
+    GitHubService service = retrofit.create(GitHubService.class);
+
+传入GitHubService的**Class**就能返回一个GitHubService对象，有这么玄乎的事情？我们看下是如何实现的：
+
+    public <T> T create(final Class<T> service) {
+      // ...省略
+      return (T) Proxy.newProxyInstance(service.getClassLoader(), new Class<?>[] { service },
+          new InvocationHandler() {
+            private final Platform platform = Platform.get();
+
+            @Override public Object invoke(Object proxy, Method method, Object... args)
+              throws Throwable {
+              // ...省略
+              ServiceMethod serviceMethod = loadServiceMethod(method);
+              OkHttpCall okHttpCall = new OkHttpCall<>(serviceMethod, args);
+              return serviceMethod.callAdapter.adapt(okHttpCall);
+            }
+          });
+    }
+
+看到Proxy、InvocationHandler，熟悉**Java动态代理**的同学，应该会豁然开朗~，如果不熟悉可以先看下这篇文章：[公共技术点之 Java 动态代理](http://www.codekk.com/blogs/detail/54cfab086c4761e5001b253d)。
+
+省略次要的代码，``invoke``方法中剩下两个重要的类：
+* ServiceMethod
+封装了定义在GitHubService中某个方法的**“要素”**（参数名称、参数注解、方法注解），通俗点讲就是**HTTP**请求的地址、参数名称和值、方法等。
+* OkHttpCall
+代理类，内部使用okhttp3.Call来实现**同步/异步**的请求。
+
+我们逐个击破，先看下**ServiceMethod**的创建过程：
+
+    ServiceMethod loadServiceMethod(Method method) {
+      ServiceMethod result;
+      synchronized (serviceMethodCache) {
+        result = serviceMethodCache.get(method);
+        if (result == null) {
+          result = new ServiceMethod.Builder(this, method).build();
+          serviceMethodCache.put(method, result);
+        }
+      }
+      return result;
+    }
+
+主要就是用了一个缓存，同一个**Method**只会创建一个**ServiceMethod**对象。
+我们重点看下**ServiceMethod**的创建过程，它也是用的**建造者模式**：
+
+    final class ServiceMethod<T> {
+      // ...省略
+      static final class Builder<T> {
+        final Annotation[] methodAnnotations; // 方法注解
+        final Annotation[][] parameterAnnotationsArray; // 参数注解
+        final Type[] parameterTypes; // 参数类型
+        Type responseType; // 返回
+        Converter<ResponseBody, T> responseConverter; // Converter.Factory的responseBodyConverter方法返回的对象
+        CallAdapter<?> callAdapter; // CallAdapter.Factory的get方法返回对象
+
+        public Builder(Retrofit retrofit, Method method) {
+          // ...省略
+          this.methodAnnotations = method.getAnnotations();
+          this.parameterTypes = method.getGenericParameterTypes();
+          this.parameterAnnotationsArray = method.getParameterAnnotations();
+        }
+
+        public ServiceMethod build() {
+          callAdapter = createCallAdapter();
+          responseType = callAdapter.responseType();
+          // ...省略
+          responseConverter = createResponseConverter();
+
+          // ...解析方法注解，url、header、post/get/put..
+          // ...解析参数注解
+          return new ServiceMethod<>(this);
+        }
+      }
+    }
+
+我们重点看下``build``方法：
+1. ``callAdapter``是根据**ServiceMethod**（Method的注解、返回类型），从**Retrofit**的``adapterFactories``集合中取出一个合适的工厂**CallAdapter.Factory**，然后使用``get``方法返回的：
+
+       private CallAdapter<?> createCallAdapter() {
+         Type returnType = method.getGenericReturnType();
+         // ...省略
+         Annotation[] annotations = method.getAnnotations();
+         try {
+           return retrofit.callAdapter(returnType, annotations);
+         } catch (RuntimeException e) { // Wide exception range because factories are user code.
+           throw methodError(e, "Unable to create call adapter for %s", returnType);
+         }
+       }
+
+     我们看到，实际上是调用``retrofit.callAdapter(returnType, annotations)``：
+
+       public final class Retrofit {
+          // ...省略
+          public CallAdapter<?> callAdapter(Type returnType, Annotation[] annotations) {
+            return nextCallAdapter(null, returnType, annotations);
+          }
+
+          public CallAdapter<?> nextCallAdapter(CallAdapter.Factory skipPast, Type returnType, Annotation[] annotations) {
+            // ...省略
+            int start = adapterFactories.indexOf(skipPast) + 1;
+            for (int i = start, count = adapterFactories.size(); i < count; i++) {
+              CallAdapter<?> adapter = adapterFactories.get(i).get(returnType, annotations, this);
+              if (adapter != null) {
+                return adapter;
+              }
+            }
+            // ...省略
+          }
+          // ...省略
+       }
+
+      ```callAdapter```会再调用``nextCallAdapter``方法，这个方法就是**遍历**```adapterFactories```，根据``returnType``（方法返回类型）和``annotations``（方法的注解），调用**CallAdapter.Factory**的``get``方法获得一个**CallAdapter**对象。
+
+      **CallAdapter.Factory**的直接继承子类有三种：
+      * DefaultCallAdapterFactory
+      * RxJavaCallAdapterFactory
+      * ExecutorCallAdapterFactory
+
+      >示例代码没有添加其他**CallAdapter.Factory**，且返回类型是```Call<List<Repo>>```，所以会用到**Retrofit**中的默认工厂：**ExecutorCallAdapterFactory**。
+      >为了不牵扯更多的知识（**RxJava**相关），我们这里只分析**ExecutorCallAdapterFactory**，有兴趣的同学可以去看下其他两个的实现。
+
+      重点看下**ExecutorCallAdapterFactory**的``get``方法：
+
+       final class ExecutorCallAdapterFactory extends CallAdapter.Factory {
+          @Override
+          public CallAdapter<Call<?>> get(Type returnType, Annotation[] annotations, Retrofit retrofit) {
+            // ...省略
+            return new CallAdapter<Call<?>>() {
+              // ...省略
+              @Override public <R> Call<R> adapt(Call<R> call) {
+                return new ExecutorCallbackCall<>(callbackExecutor, call);
+              }
+            };
+          }
+       }
+
+      ``get``方法返回的是**CallAdapter**，**CallAdapter**的``adapt``方法，正是我们在**Retrofit**的``create``方法中最后调用的：
+
+       // ...省略
+       return serviceMethod.callAdapter.adapt(okHttpCall);
+``adapt``返回的**ExecutorCallbackCall**是一个实现了**Call接口**的代理类，它的``enqueue``、``execute``等方法，最终调用的都是传入的参数``okHttpCall``(同样也实现了Call接口)的方法。
+
+      之所以这样设计，是为了控制``enqueue``方法返回的结果所在的线程，它使用了**Retrofit**在构建时的**Executor**属性来作为线程的调度器（还记得吧？**Android**中默认的是**MainThreadExecutor**。）：
+
+       static final class ExecutorCallbackCall<T> implements Call<T> {
+          final Executor callbackExecutor;
+          final Call<T> delegate;
+
+          ExecutorCallbackCall(Executor callbackExecutor, Call<T> delegate) {
+            this.callbackExecutor = callbackExecutor;
+            this.delegate = delegate;
+          }
+
+          @Override public void enqueue(final Callback<T> callback) {
+            // ...
+            delegate.enqueue(new Callback<T>() {
+              @Override public void onResponse(Call<T> call, final Response<T> response) {
+                callbackExecutor.execute(new Runnable() {
+                  @Override public void run() {        
+                    // ...        
+                    callback.onResponse(ExecutorCallbackCall.this, response);
+                  }
+                });
+              }
+              // ...
+            });
+          }
+       }
+
+    ``callbackExecutor``就是**MainThreadExecutor**，``callback``为**OkHttpCall**。我们有理由相信**OkHttpCall**中大有玄妙，我们稍后会作分析~
+
+2. ``responseConverter``是通过``createResponseConverter()``方法创建的：
+
+       private Converter<ResponseBody, T> createResponseConverter() {
+          Annotation[] annotations = method.getAnnotations();
+          try {
+            return retrofit.responseBodyConverter(responseType, annotations);
+          } catch (RuntimeException e) { // Wide exception range because factories are user code.
+            throw methodError(e, "Unable to create converter for %s", responseType);
+          }
+       }
+
+     我们发现调用了``retrofit``的``responseBodyConverter``方法：
+
+       public final class Retrofit {
+         // ...
+         public <T> Converter<ResponseBody, T> responseBodyConverter(Type type, Annotation[] annotations) {
+           return nextResponseBodyConverter(null, type, annotations);
+         }
+
+         public <T> Converter<ResponseBody, T> nextResponseBodyConverter(Converter.Factory skipPast, Type type, Annotation[] annotations) {
+           // ...
+           int start = converterFactories.indexOf(skipPast) + 1;
+           for (int i = start, count = converterFactories.size(); i < count; i++) {
+             Converter<ResponseBody, ?> converter =
+                 converterFactories.get(i).responseBodyConverter(type, annotations, this);
+             if (converter != null) {
+               //noinspection unchecked
+               return (Converter<ResponseBody, T>) converter;
+             }
+           }
+           // ...
+         }
+         // ...
+       }
+
+    遍历``converterFactories``集合，调用**Converter.Factory**的``responseBodyConverter``方法，返回一个**Converter**对象。如果你的接口返回数据是``json``格式，那么你会使用**GsonConverterFactory**来做为结果的转换器:
+
+       public final class GsonConverterFactory extends Converter.Factory {
+         // ...
+         @Override
+         public Converter<ResponseBody, ?> responseBodyConverter(Type type, Annotation[] annotations, Retrofit retrofit) {
+           TypeAdapter<?> adapter = gson.getAdapter(TypeToken.get(type));
+           return new GsonResponseBodyConverter<>(gson, adapter);
+         }
+       }
+
+    ``responseBodyConverter``方法返回的**GsonResponseBodyConverter**是用来将``json``数据格式转换为``T``，它的方法很简单，关键方法就是``convert``：
+
+       final class GsonResponseBodyConverter<T> implements Converter<ResponseBody, T> {
+        private final Gson gson;
+        private final TypeAdapter<T> adapter;
+
+        GsonResponseBodyConverter(Gson gson, TypeAdapter<T> adapter) {
+          this.gson = gson;
+          this.adapter = adapter;
+        }
+
+        @Override public T convert(ResponseBody value) throws IOException {
+          JsonReader jsonReader = gson.newJsonReader(value.charStream());
+          try {
+            return adapter.read(jsonReader);
+          } finally {
+            value.close();
+          }
+        }
+       }
+
+    主要就是使用**[Gson](https://github.com/google/gson)**这个框架来做解析，这不是本文的重点，所以不做过多分析了。
+
+至此，**ServiceMethod**我们已经分析完毕了。
+接下来我们看下**OkHttpCall**吧~
+
+----
+## OkHttpCall，让请求飞吧~
+
+**OkHttpCall**实现了``retrofit2.Call``接口，实现了我们常用的异步请求``enqueue``、同步请求``execute``等方法，其实内部是使用``okhttp3.Call``来完成最终的网络请求，如果你还不熟悉**OkHttp**，可以参考这篇文章： [Android OkHttp完全解析 是时候来了解OkHttp了](http://blog.csdn.net/lmj623565791/article/details/47911083)。
+
+我们以同步方法``execute``做为示例分析下，``enqueue``其实是大同小异的：
+
+    @Override public Response<T> execute() throws IOException {
+      okhttp3.Call call;
+      // ...省略
+      call = rawCall = createRawCall();
+      // ...省略   
+      return parseResponse(call.execute());
+    }
+
+使用``createRawCall``创建``call``对象，然后调用``call.execute``的方法得到``Response``对象，看下``okhttp3.Call``的创建过程：
+
+    private okhttp3.Call createRawCall() throws IOException {
+      Request request = serviceMethod.toRequest(args);
+      okhttp3.Call call = serviceMethod.callFactory.newCall(request);
+      if (call == null) {
+        throw new NullPointerException("Call.Factory returned null.");
+      }
+      return call;
+    }
+
+这里又看到**ServiceMethod**，使用``toRequest``方法，将**ServiceMethod**中保存的请求信息转换为**Request**对象，然后使用``serviceMethod.callFactory.newCal``方法，返回``okhttp3.Call``对象。我们之前分析过，``callFactory``实际就是**Retrofit**中的``callFactory``对象，而默认的``callFactory``使用的是**OkHttpClient**。
+
+接上文，得到``Response``对象，会调用``parseReponse``方法，最终得到``Response<T>``对象，``T``也就是我们在方法中定义的返回类型：
+
+    Response<T> parseResponse(okhttp3.Response rawResponse) throws IOException {
+      ResponseBody rawBody = rawResponse.body();
+      // ...省略
+      ExceptionCatchingRequestBody catchingBody = new ExceptionCatchingRequestBody(rawBody);
+      // ...省略
+      T body = serviceMethod.toResponse(catchingBody);
+      return Response.success(body, rawResponse);
+    }
+
+我们比较关心T是如何生成的，所以看下``serviceMethod.toResponse``方法：
+
+    T toResponse(ResponseBody body) throws IOException {
+      return responseConverter.convert(body);
+    }
+
+``responseConverter``实际就是**GsonResponseBodyConverter**，我们在分析**ServiceMethod**的时候提到过，其实就是用了**[Gson](https://github.com/google/gson)**框架对发挥的**json**格式数据做了一个**“反序列化”**操作。
+
+至此，我们已经分析完**Retrofit**的整个工作流程。
+
+----
+第一次尝试把源码分析的过程整理出来，因为篇幅比较长，所以阅读体验希望大家能多提提意见，您的意见正是我宝贵的财富，谢谢~

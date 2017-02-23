@@ -72,8 +72,8 @@ layout: default
                     data-images="{{ site.url }}{{site.baseurl}}/{% if page.header-img %}{{ page.header-img }}{% else %}{{ site.header-img }}{% endif %}"
                     data-content="{{ content | strip_html | truncate:80 }} | {{ site.SEOTitle }} " >
                     <div class="ds-share-inline">
-                      <style> 
-                        .ds-share-icons-16 {display:none;} 
+                      <style>
+                        .ds-share-icons-16 {display:none;}
                       </style>
                       <ul class="ds-share-icons-16">
                         <li data-toggle="ds-share-icons-more"><a class="ds-more" href="#">分享到：</a></li>
@@ -130,7 +130,7 @@ layout: default
                 <!-- disqus 评论框 end -->
                 {% endif %}
 
-            </div>  
+            </div>
 
     <!-- Side Catalog Container -->
         {% if page.catalog %}
@@ -187,6 +187,18 @@ layout: default
     </div>
 </article>
 
+{% if site.uyan_uid %}
+<!-- 友言公共JS代码 start (一个网页只需插入一次) -->
+<div id="uyan_frame"></div>
+<script type="text/javascript" src="http://v2.uyan.cc/code/uyan.js?uid=2125984"></script>
+
+<!-- <script type="text/javascript">
+  var _user = '{{site.uyan_uid}}';
+  var src = "http://v2.uyan.cc/code/uyan.js?uid=" + _user;
+  uyan.src = src;
+</script> -->
+<!-- 友言公共JS代码 end -->
+{% endif %}
 
 {% if site.duoshuo_username %}
 <!-- 多说公共JS代码 start (一个网页只需插入一次) -->
