@@ -1,0 +1,433 @@
+---
+layout:     post
+title:      "Android中如何优雅的实现分页"
+subtitle:   ""
+date:       2016-09-07 12:00:00
+author:     "zhuhf"
+header-img: ""
+header-mask: 0.3
+catalog:    true
+tags:
+    - Android
+    - Page
+---
+
+## 何为分页？
+> 以QQ好友列表为例：假如你的好友总共有100个，那么考虑性能等因素，第一次只获取并显示前10条数据。当用户加载更多时，再去获取后面的10条数据，并与之前的数据合并一起展示给用户。
+
+让我们看下常见的几种写法（仅关键代码）：
+
+#### 写法一
+```
+public class XActivity extends Activity
+{
+    int currentIndex = -1; // 假设从0开始
+    int pageSize = 10;
+
+    // 下拉刷新
+    public void onPullDown()
+    {
+        currentIndex = 0;
+        // 请求服务器数据
+        loadFromServer(currentIndex, pageSize, new Callback(){
+               public void onSuccess(List list)
+               {}   
+               public void onFailure()
+               {}
+         });
+    }
+
+    // 上拉加载更多
+    public void onPullUp()
+    {
+        currentIndex++;
+        // 请求服务器数据
+        loadFromServer(currentIndex, pageSize, new Callback(){
+               public void onSuccess(List list)
+               {}               
+               public void onFailure()
+               {}
+         });
+    }
+}
+```
+乍一看似乎没啥问题，仔细一看，如果请求失败了（这里假设：没有数据服务器也会返回失败），会出现这样的问题：
+
+> 第一次我们从服务器获取10条数据（假设没有网络），那么必定无法获取到数据，此时```currentIndex```的值变成0了。如果这时候用户“上拉加载更多”（假设有网络），那么```currentIndex```的值变成1了，此时从服务器获取的数据是“第二页”的，因为第一页数据被我们跳过了~
+
+解决办法是什么呢？我们思考下，出现问题的原因是因为我们“提早”改变```currentIndex```的值了！那么解决办法就是在“成功”的情况下才去改变```currentIndex```的值。于是，我们有了**第二种**写法。
+
+#### 写法二
+```
+public class XActivity extends Activity
+{
+    int currentIndex = 0;
+    int pageSize = 10;
+
+    // 下拉刷新
+    public void onPullDown()
+    {
+        // 请求服务器数据
+        loadFromServer(0, pageSize, new Callback(){
+               // 请求服务器数据
+               public void onSuccess(List list)
+               {
+                    currentIndex = 0;
+               }         
+               public void onFailure()
+               {}
+         });
+    }
+
+    // 上拉加载更多
+    public void onPullUp()
+    {
+        // 请求服务器数据
+        loadFromServer(currentIndex + 1, pageSize, new Callback(){
+               public void onSuccess(List list)
+               {
+                    currentIndex++;
+               }
+               public void onFailure()
+               {}
+         });
+    }
+}
+```
+你会问：第二种写法没啥问题了吧？嗯~，确实没啥问题。有一天服务器哥们跑来跟你说，分页策略要换一种方式，纳尼？分页还能有啥策略？？？（以上策略为```pageIndex, pageSize```）
+
+确实还有一种策略，那就是```startIndex, endIndex```，也就是获取指定**区间**的数据，万一哪天**接口**用这种策略来分页，你心里估计有一万个草泥马了。
+> 这种策略现实中是有它存在的场景的，比如说，列表页面需要删除某条数据，但需要保持原位置不动，此时我们如果通过**“先删除后刷新”**的模式，那么就需要控制列表滚动到刚刚用户浏览的记录的位置。
+技术来讲上是可以实现的，但对于用户体验来讲，会有一个加载的过程，显然是不太友好的。
+
+换一种思路，如果采用**“先删除服务器后删除本地”**，那么就可以避免**“再次请求数据并刷新”**的过程，对于用户体验来讲，也是非常大的提升。
+
+如果使用```pageIndex, pageSize```的策略，那么就显然无法满足这种需求。
+
+举个例子，假如目前有10条数据，调接口删除了第10条数据，此时请求下一页数据，会漏掉删除之前原本排在第11位的数据。
+而使用```startIndex, endIndex```策略，可以将```startIndex-1```之后再去获取下一页数据，这样数据就不会丢失。
+
+既然如此，我们来看下这种策略如何实现吧（伏笔，后面会放大招如何统一处理这两种策略）
+
+#### 写法三
+```
+public class XActivity extends Activity
+{
+    final int pageSize = 10; // 固定大小
+    int startIndex = -1;  // 起始页（从0开始）
+
+    // 下拉刷新
+    public void onPullDown()
+    {
+        // 请求服务器数据
+        loadFromServer(0, pageSize - 1, new Callback(){
+               // 请求服务器数据
+               public void onSuccess(List list)
+               {
+                    startIndex = 0;
+               }         
+               public void onFailure()
+               {}
+         });
+    }
+
+    // 上拉加载更多
+    public void onPullUp()
+    {
+        // 防止第一页直接“上拉加载更多”
+        int tempStartIndex = startIndex + pageSize;
+        if (startIndex == -1)
+        {  
+            tempStartIndex = 0;
+        }
+        // 请求服务器数据
+        loadFromServer(tempStartIndex, tempStartIndex + pageSize - 1, new Callback(){
+               public void onSuccess(List list)
+               {
+                    startIndex = tempStartIndex;
+               }
+               public void onFailure()
+               {}
+         });
+    }
+}
+```
+以上代码概括来讲可以这样表示：[0, 9]、[10, 19]、[20, 29]...
+
+## 分页为何如此重要？
+
+对于一个App来说，界面基本可以归结为两种：**列表**和**单页面**。如果团队开发，每个列表界面都让开发去写一套分页的逻辑（都按照标准就谢天谢地了，见过copy都能漏的），难免会有出错的时候（代码丛中走，哪有不湿鞋~）。
+
+遇到这种情况，直觉上告诉我，有必要来一次封装了。我们思考下，这两种策略的共同之处有哪些？
+
+
+![共同之处.png](http://upload-images.jianshu.io/upload_images/1787010-bda664371205b65d.png?imageMogr2/auto-orient/strip%7CimageView2/2/w/1240)
+共同之处应该比较好理解，不同之处主要是什么呢？
+那就是分页需要的两个参数param1和param2，计算方式如下：
+* param1
+   * pageIndex, pagSize：```param1 = ++currPageIndex```
+   * startIndex, endIndex：```param1 = currPageIndex + pageSize```
+* param2
+   * pageIndex, pagSize：```param2 = pageSize```
+   * startIndex, endIndex：```param2 = currPageIndex + pageSize - 1```
+
+注：```currPageIndex```表示当前页下标。
+
+具体实现看下面代码，不同之处会定义为两个抽象方法，交给不同策略去实现（仅贴出了关键代码并作了一定裁剪）。
+
+#### 共同之处实现
+```
+public abstract class IPage {
+    // 默认起始页下标
+    public static final int DEFAULT_START_PAGE_INDEX = 0;
+    // 默认分页大小
+    public static final int DEFAULT_PAGE_SIZE = 10;
+
+    protected int currPageIndex; // 当前页下标
+    int lastPageIndex; // 记录上一次的页下标
+    int pageSize; // 分页大小
+    boolean isLoading; // 是否正在加载
+    Object lock = new Object(); // 锁
+
+    public IPage()
+    {
+        initPageConfig();
+    }
+
+    /**
+     * 加载分页数据
+     * 分页策略1:[param1, param2] = [pageIndex, pageSize]
+     * 分页策略2:[param1, param2] = [startIndex, endIndex]
+     * @param param1
+     * @param param2
+     */
+    public abstract void load(int param1, int param2);
+
+    /**
+     * 根据分页策略,处理第一个分页参数
+     * @param currPageIndex
+     * @param pageSize
+     * @return
+     */
+    public abstract int handlePageIndex(int currPageIndex, int pageSize);
+
+    /**
+     * 根据分页策略,处理第二个分页参数
+     * @param currPageIndex
+     * @param pageSize
+     * @return
+     */
+    protected abstract int handlePage(int currPageIndex, int pageSize);
+
+    /**
+     * 初始化分页参数
+     */
+    private void initPageConfig()
+    {
+        currPageIndex = DEFAULT_START_PAGE_INDEX - 1;
+        lastPageIndex = currPageIndex;
+        pageSize = DEFAULT_PAGE_SIZE;
+        isLoading = false;
+    }
+
+    /**
+     * 分页加载数据
+     * [可能会抛出异常，请确认数据加载结束后，你已经调用了finishLoad(boolean success)方法]
+     * @param isFirstPage true: 第一页  false: 下一页
+     */
+    public void loadPage()
+    {
+        synchronized (lock)
+        {
+            if (isLoading) // 如果正在加载数据，则抛出异常
+            {
+                throw new RuntimeException();
+            }
+            else
+            {
+                isLoading = true;
+            }
+        }
+        if (isFirstPage) // 加载第一页数据
+        {    
+            currPageIndex = getStartPageIndex();
+        }
+        else
+        {
+            currPageIndex = handlePageIndex(currPageIndex, pageSize);
+        }
+        load(currPageIndex, handlePage(currPageIndex, pageSize));
+    }
+
+    /**
+     * 加载结束
+     * @param success true：加载成功  false：失败(无数据)
+     */
+    public void finishLoad(boolean success)
+    {
+        synchronized (lock)
+        {
+            isLoading = false;
+        }
+        if (success)
+        {
+            lastPageIndex = currPageIndex;
+        }
+        else
+        {
+            currPageIndex = lastPageIndex;
+        }
+    }
+}
+```
+
+`handlePageIndex`和`handlePage`两个抽象方法分别用来计算`param1`和`param2`，需要具体分页策略（子类）来实现。
+
+关键方法`loadPage`：
+首先，判断是否是第一页，来计算第一个参数`param1`：
+```
+if (isFirstPage) // 加载第一页数据
+{
+    currPageIndex = getStartPageIndex();
+}
+else
+{
+    currPageIndex = handlePageIndex(currPageIndex, pageSize);
+}
+```
+紧接着，计算第二个参数```param2```，并调用抽象方法```load(int param1, int param2)```回调给调用者：
+```
+load(currPageIndex, handlePage(currPageIndex, pageSize));
+```
+
+
+#### 不同之处的实现
+* pageIndex, pageSize策略*
+```
+public abstract class Page1 extends IPage
+{
+    @Override
+    public int handlePageIndex(int currPageIndex, int pageSize) {
+        return ++currPageIndex;
+    }
+
+    @Override
+    protected int handlePage(int currPageIndex, int pageSize) {
+        return pageSize;
+    }
+}
+```
+* startIndex, endIndex策略*
+```
+public abstract class Page2 extends IPage
+{
+    @Override
+    public int handlePageIndex(int currPageIndex, int pageSize) {
+         if (currPageIndex == getStartPageIndex() - 1) // 加载第一页数据(防止第一页使用"上拉加载更多")
+         {    
+            return getStartPageIndex();
+         }
+         return currPageIndex + pageSize;
+    }
+
+    @Override
+    protected int handlePage(int currPageIndex, int pageSize) {
+        return currPageIndex + pageSize - 1;
+    }
+
+    /**
+     * 起始下标递减
+     */
+    public void decreaseStartIndex()
+    {
+        currPageIndex--;
+        checkBound();
+    }
+
+    /**
+     * 起始下标递减
+     */
+    public void decreaseStartIndex(int size)
+    {
+        currPageIndex -= size;
+        checkBound();
+    }
+
+    /**
+     * 边界检测
+     */
+    private void checkBound()
+    {
+        if (currPageIndex < getStartPageIndex() - pageSize)
+        {
+            currPageIndex = getStartPageIndex() - pageSize;
+        }
+    }
+}
+```
+这两种策略的算法应该不用多讲，其实就是我们在前面几种写法中提到过的。
+
+封装好了之后，我们看下如何使用吧。
+```
+public class XActivity extends Activity
+{
+    IPage page;
+    void init()
+    {
+        page = new Page1() { // pageIndex, pageSize策略
+            @Override
+            public void load(int param1, int param2) {
+                // 请求服务器数据
+                loadFromServer(param1, param2, new Callback(){
+                    public void onSuccess(List list)
+                    {
+                       // 一定要调用，加载成功
+                       page.finishLoad(true);
+                    }   
+                    public void onFailure()
+                    {
+                       // 一定要调用，加载失败
+                       page.finishLoad(false);
+                    }
+               });
+            }
+        };
+    }
+
+    // 下拉刷新
+    public void onPullDown()
+    {
+        page.loadPage(true);
+    }
+
+    // 上拉加载更多
+    public void onPullUp()
+    {
+        page.loadPage(false);
+    }
+}
+```
+是不是瞬间感觉世界如此之清净，万物归于平静。如果如要使用```startIndex, endIndex```策略，只需这样做：
+```
+page = new Page1() {
+}
+```
+替换为
+```
+page = new Page2() {
+}
+```
+注意：不管成功还是失败，最后一定要调用```page.finishLoad(true or false)```，否则你再次调用```page.loadPage(boolean isFirstPage)```会抛出一个异常。
+
+这里的设计思路，一方面出于**加载失败回滚分页**，一方面为了控制```IPage```的**并发访问**（实际情况，我们使用的上拉和下拉组件，不会同时触发上拉和下拉回调函数的）。
+
+## 拓展
+我们一般是用```ListView```或者``ExpandableListView``去实现列表，而这二者都是需要使用适配器去显示数据，那么我们是不是可以把```IPage```封装到我们的**“基类”适配器**呢？这样，使用者甚至都不知道``IPage``的存在，而只需要关心非常熟悉的**适配器Adapter**。
+思路已经很明显，具体的实现各位可以去试试看。
+
+## 写在最后
+本文所讲解的分页实现方式，包括拓展中如何与适配器结合的思考，其实是**[Android-BaseLine](https://github.com/hiphonezhu/Android-BaseLine)**框架中的一个模块而已。
+
+另外，**[Android-BaseLine](https://github.com/hiphonezhu/Android-BaseLine)**还提供了很多其他模块的封装（比如网络请求模块、异步任务的封装、数据层和UI层的通信方式统一、key-value数据库存储、6.0动态权限申请、各种适配器（普通、分页、单选、多选）等），后续有机会跟大家作进一步的介绍。
+
+当然，框架的好坏各有各的见解，我只想说，适合当下的才是最好的。

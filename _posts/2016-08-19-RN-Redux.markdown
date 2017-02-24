@@ -1,0 +1,304 @@
+---
+layout:     post
+title:      "[React Native]Redux的基本使用方式"
+subtitle:   ""
+date:       2016-08-19 12:00:00
+author:     "zhuhf"
+header-img: ""
+header-mask: 0.3
+catalog:    true
+tags:
+    - RN
+    - Redux的基本使用方式
+---
+## 前言
+好久不写文章了，这段时间断断续续在学习Redux。Redux对于新手，尤其我这样一个之前从未做过WEB开发，也不知何为Flux，确实不太好理解。所以，我准备用一个简单的示例，来演示如何编写一个基于Redux的程序。
+
+关于Redux的前世今生，不是本文介绍的重点。建议读者在有一定Redux认知的基础上来阅读本篇文章，不然可能看的还是云里雾里，这里推荐几个介绍Redux的文章：
+* [看漫画，学 Redux](http://zhongjie-chen.github.io/blog/2015/09/18/%E7%9C%8B%E6%BC%AB%E7%94%BB-%E5%AD%A6-Redux/)-不写一行代码，轻松看懂 Redux 原理。
+* [[Redux 中文文档](http://github.com/camsong/redux-in-chinese)](http://cn.redux.js.org/)-官方文档，必看！
+* [在react-native中使用redux](http://www.jianshu.com/p/2c43860b0532)-简单示例，有源码~
+
+这里，以一个简单的登录功能，来介绍Redux。要实现的效果很简单：
+![preview.gif](http://upload-images.jianshu.io/upload_images/1787010-fa5122a23a1942ff.gif?imageMogr2/auto-orient/strip)
+
+点击登录，模拟一个用户登录（实际是```fetch```一个网址），成功之后携带用户信息跳转到一个新的页面并展示。
+
+Redux三个最重要的概念：action，reducer，store。我们一步步看实例如何实现。
+
+## action
+
+    'use strict';
+    import * as types from '../constants/ActionTypes';
+
+    // 模拟服务器返回的用户信息
+    let user = {
+        'name': 'admin',
+        'age': '24'
+    }
+
+    // 执行登录
+    export function doLogin() {
+        return dispatch = >{
+            dispatch(isLogining());
+            // 模拟用户登录
+            let result = fetch('https://github.com/').then((res) = >{
+                dispatch(loginSuccess(true, user));
+            }).
+            catch((e) = >{
+                dispatch(loginSuccess(false, null));
+            });
+        }
+    }
+
+    // 正在登录
+    function isLogining() {
+        return {
+            type: types.LOGIN_IN_DOING
+        }
+    }
+
+    // 登录完成
+    function loginSuccess(isSuccess, user) {
+        return {
+            type: types.LOGIN_IN_DONE,
+            isSuccess: isSuccess,
+            user: user
+        }
+    }
+
+`actions/Login.js`定义了store的行为：```doLogin()```
+* 首先，```dispatch(isLogining());```发出一个```action```，表示正在登录。
+* 然后，使用```fetch```访问一个网址（模拟登录过程），成功之后使用```dispatch(loginSuccess(true, user));```发出一个action，表示登录成功，并且把模拟的用户数据发出去；当然，如果失败，也会使用```dispatch(loginSuccess(false, null));```，只不过数据为空。
+
+有了action，接下来需要对应的reducer来处理了。
+
+## reducer
+```
+'use strict';
+
+import * as types from '../constants/ActionTypes';
+
+// 初始状态
+const initialState = {
+  status: 'init', // init,doing,done
+  isSuccess: false,
+  user: null,
+}
+
+export default function loginIn(state = initialState, action) {
+  switch (action.type) {
+    case types.LOGIN_IN_INIT: // 初始状态
+      return Object.assign({}, state, {
+        status: 'init',
+        isSuccess: false,
+        user: null
+      });
+    case types.LOGIN_IN_DOING: // 正在登录
+      return Object.assign({}, state, {
+        status: 'doing',
+        isSuccess: false,
+        user: null
+      });
+    case types.LOGIN_IN_DONE: // 登录完成
+      return Object.assign({}, state, {
+        status: 'done',
+        isSuccess: action.isSuccess,
+        user: action.user
+      })
+    default:
+      return state;
+  }
+}
+```
+`reducers/Login.js`中：```loginIn```其实就是对action的处理，负责返回新的状态的函数，这也是reducer的存在的作用。
+
+由于Redux中只允许有一个store，当业务越来越庞大的时候，我们就需要拆分出N个reducer。这时候，就需要把这N个reducer组合起来，因此我们需要一个根reducer。
+
+`reducers/Index.js`:
+
+    'use strict';
+
+    import {combineReducers} from 'redux';
+    import loginIn from './Login';
+
+    const rootReducer = combineReducers({
+      loginIn
+    });
+
+    export default rootReducer;
+
+* combineReducers是将所有的reducer进行组合，因为我们可能有N个reducer。
+
+## store
+
+    'use strict';
+
+    import {createStore, applyMiddleware} from 'redux';
+    import thunkMiddleware from 'redux-thunk';
+    import rootReducer from '../reducers/Index';
+
+    const createStoreWithMiddleware = applyMiddleware(thunkMiddleware)(createStore);
+
+    export default function configureStore(initialState) {
+      const store = createStoreWithMiddleware(rootReducer, initialState);
+
+      return store;
+    }
+
+这是store的一个基本写法
+* ```applyMiddleware```表示将中间件（thunkMiddleware：异步中间件等）应用在redux action过程中。
+* ```createStoreWithMiddleware```表示使用reducer来创建store。
+
+**程序入口**
+
+    import React, { Component } from 'react';
+    import {Provider} from 'react-redux';
+    import configureStore from './store/ConfigureStore';
+
+    import App from './containers/App';
+
+    const store = configureStore();
+
+    export default class Root extends Component {
+      render() {
+        return (
+          <Provider store={store}>
+            <App />
+          </Provider>
+        );
+      }
+    }
+
+* 使用```Provider```来包裹整个程序的入口组件```App```，同时将```store```传进去。
+* 实际入口组件是```App```，让我们来看下
+
+`containers/App.js`:
+
+    import React, { Component } from 'react';
+    import {
+      View,
+      Text,
+      Navigator
+    } from 'react-native';
+
+    import LoginPage from '../pages/LoginPage'
+
+    export default class App extends Component {
+      render() {
+        return (
+            <Navigator
+                style=\{\{flex: 1\}\}
+                initialRoute= \{\{id: 'LoginPage', component: LoginPage\}\}
+                configureScene= {this.configureScene}
+                renderScene= {this.renderScene}
+            />
+        );
+      }
+      configureScene(route, routeStack) {
+        if (route.sceneConfig) { // 有设置场景
+            return route.sceneConfig;
+        }
+        return Navigator.SceneConfigs.PushFromRight; // 默认，右侧弹出
+      }
+      renderScene(route, navigator) {
+        return <route.component {...route.passProps} navigator= {navigator}/>;
+      }
+    }
+
+> 不熟悉Navigator的朋友，可以先去阅读这篇文章[[React Native]导航器Navigator](http://www.jianshu.com/p/39250349a3ef)。
+
+* 导航控制器的根页面是`LoginPage`，页面内容很简单，如下`pages/LoginPage.js`。
+```
+import React, { Component } from 'react';
+  import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+  } from 'react-native';
+
+  import {connect} from 'react-redux';
+  import {doLogin} from '../actions/Login'
+
+  import MainPage from '../pages/MainPage'
+
+  class LoginPage extends Component {
+
+    shouldComponentUpdate(nextProps, nextState)
+    {
+      // 登录完成，且成功登录
+      if (nextProps.status === 'done' && nextProps.isSuccess) {
+        this.props.navigator.replace({
+          id: 'MainPage',
+          component: MainPage,
+          passProps: {
+             user: nextProps.user
+          },
+        });
+        return false;
+      }
+      return true;
+    }
+
+    render() {
+      let tips;
+      if (this.props.status === 'init')
+      {
+        tips = '请点击登录';
+      }
+      else if (this.props.status === 'doing')
+      {
+        tips = '正在登录...';
+      }
+      else if (this.props.status === 'done' && !this.props.isSuccess)
+      {
+        tips = '登录失败, 请重新登录';
+      }
+      return (
+        <View style=\{\{flex: 1, alignItems: 'center', justifyContent: 'center', flexDirection: 'column'\}\}>
+          <Text>{tips}</Text>
+          <TouchableOpacity style=\{\{backgroundColor: '#FF0000'\}\} onPress={this.handleLogin.bind(this)}>
+            <View style=\{\{flexDirection: 'row', alignItems: 'center', justifyContent: 'center', width: 100, height: 50\}\}>
+              <Text style=\{\{color: '#FFFFFF', fontSize: 20\}\}>登录</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // 执行登录
+    handleLogin()
+    {
+      this.props.dispatch(doLogin());
+    }
+  }
+
+  function select(store)
+  {
+    return {
+      status: store.loginIn.status,
+      isSuccess: store.loginIn.isSuccess,
+      user: store.loginIn.user
+    }
+  }
+
+  const styles = StyleSheet.create({
+    container: {
+      flex: 1,
+    },
+  });
+
+  export default connect(select)(LoginPage);
+```
+* `connect(select)(LoginPage)`表示`LoginPage`组件对`store`的状态感兴趣。
+* ```select```函数的作用是将```store```的状态绑定到当前组件的```props```中。
+* ```handleLogin()```执行登录，使用```this.props.dispatch(doLogin())```触发```action```，经过```reducer```处理后，新的状态交还给```store```，```store```会通知视图刷新。所以```shouldComponentUpdate```会被调用，然后，判断登录成功则切换页面到```MainPage```（并携带参数```user```）。
+* ```MainPage```比较简单，仅仅展示了```user```的内容，这里不再贴代码了。
+
+**至此，一个简单的Redux示例就完成了，让我们来稍微总结下：**
+* 整个应用只有一个```store```，用来保存所有的状态，视图不需要自己维护状态。
+* 视图通过```connect```函数绑定到```store```，当```store```状态变化后，```store```会通知视图刷新。
+* 触发一个```action```之后，会经过可能N个```reducers```处理，最后根```reducer```会将所有```reducers```处理之后的状态合并，然后交给```store```，```store```再通知视图刷新。
+
+**本文的源码地址**：[Demo12](https://github.com/hiphonezhu/RN-Demos/tree/master/Demo12)
