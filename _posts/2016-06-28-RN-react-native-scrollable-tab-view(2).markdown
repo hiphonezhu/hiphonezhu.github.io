@@ -12,10 +12,10 @@ tags:
     - react-native-scrollable-tab-view
 ---
 
-在上一篇文章当中，我们学习了[react-native-scrollable-tab-view](http://zhuhf.tech/2016/06/23/RN-react-native-scrollable-tab-view(1))的基本使用方式，包括基本**Props**的使用介绍等。我们知道官方为我们提供了两种基本的Tab控制器样式，**DefaultTabBar**和**ScrollableTabBar**。很多情况下，官方的样式并不能满足我们的需求（备注：官方的样式是文字+下划线的风格），那么此时就需要我们自己来实现特定的样式。
+在上一篇文章当中，我们学习了[react-native-scrollable-tab-view](https://github.com/skv-headless/react-native-scrollable-tab-view)的基本使用方式，包括基本**Props**的使用介绍等。我们知道官方为我们提供了两种基本的Tab控制器样式，**DefaultTabBar**和**ScrollableTabBar**。很多情况下，官方的样式并不能满足我们的需求（备注：官方的样式是文字+下划线的风格），那么此时就需要我们自己来实现特定的样式。
 
 ---
-今天我们是react-native-scrollable-tab-view的下篇，本片文章的很多概念建立在上篇的基础之上，还没有阅读过的朋友可以先去参考[[React Native]react-native-scrollable-tab-view(入门篇)](http://www.jianshu.com/p/b7788c3d106e)。
+今天我们是react-native-scrollable-tab-view的下篇，本片文章的很多概念建立在上篇的基础之上，还没有阅读过的朋友可以先去参考[[React Native]react-native-scrollable-tab-view(入门篇)](http://zhuhf.tech/2016/06/23/RN-react-native-scrollable-tab-view(1))。
 
 本文要实现这样的效果：
 
