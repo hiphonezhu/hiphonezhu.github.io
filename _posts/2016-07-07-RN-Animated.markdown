@@ -14,7 +14,7 @@ tags:
 
 在上一篇文章中，我们学习了React Native实现动画的几种方式，其中重点介绍了**LayoutAnimation**。文章的末尾也提到，如果你需要更强大的动画功能，就需要使用高级API—**Animated**。
 
-如果你还不了解**LayoutAnimation**，建议先阅读下上一篇文章[[React Native]动画-LayoutAnimation](http://www.jianshu.com/p/3ce1d27fc246)，其中的一些概念能让你更好的理解本篇文章的内容。
+如果你还不了解**LayoutAnimation**，建议先阅读下上一篇文章[[React Native]动画-LayoutAnimation](http://zhuhf.tech/2016/07/05/RN-LayoutAnimation/)，其中的一些概念能让你更好的理解本篇文章的内容。
 
 本篇文章会一步步介绍**Animated**的用法，如果有误之处，欢迎指正~
 
