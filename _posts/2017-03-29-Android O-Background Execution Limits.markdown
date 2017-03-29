@@ -18,6 +18,7 @@ tags:
 
  - 限制后台服务
 当我们的程序处于“空闲”状态，“后台服务”会被限制执行，但是这不影响“前台服务”。
+
  - 限制广播
 程序不能在Manifest中注册“限制性”广播，但仍然可以动态的去注册。
 
@@ -48,12 +49,12 @@ tags:
 谷歌提供了两种建议的方案：
 
  - 使用 **JobScheduler** 替代 Service 来执行“周期性”任务
-关于 JobScheduler 的使用请参考[这里](http://blog.csdn.net/bboyfeiyu/article/details/44809395)
-- 使用“前台” Service
+关于 JobScheduler 的使用请参考[这里](http://blog.csdn.net/bboyfeiyu/article/details/44809395)。
+ - 使用“前台” Service
+
 Android O 之前，创建“前台” Service 的步骤：
 
  1. 先使用 `startService()` 方法启动一个 Service；
- 
  2. 然后使用 `Service.startForeground()` 方法将 Service 设置为“前台” 。
 
 这样在通知栏就会显示一个 notification ，表明 Service 是“前台”服务。
@@ -72,7 +73,7 @@ Android O 之前，创建“前台” Service 的步骤：
 **举个例子：**
 
  -  如果有 App 安装了新版本，那么`ACTION_PACKAGE_REPLACED`将会发送给所有注册了此广播的 App，而不是某一个指定的 App，所以我们称它为 “implicit”。
- -  而 `ACTION_MY_PACKAGE_REPLACED`只会发送给指定的 App，所以称它为“explicit”。
+ -   而 `ACTION_MY_PACKAGE_REPLACED`只会发送给指定的 App，所以称它为“explicit”。
  
 **具体限制表现为：**
 
