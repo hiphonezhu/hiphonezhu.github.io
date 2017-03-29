@@ -20,6 +20,7 @@ tags:
 当我们的程序处于“空闲”状态，“后台服务”会被限制执行，但是这不影响“前台服务”。
 
  - 限制广播
+
 程序不能在Manifest中注册“限制性”广播，但仍然可以动态的去注册。
 
 > 注意：如果 targetSdkVersion <= 25，则不受以上两个限制。
@@ -30,7 +31,9 @@ tags:
 系统将一个 App 分为“前台”和“后台”两种状态。当满足下面任意一个条件，则认为是“前台” App：
 
  - 拥有可见的 Activity，状态为 started 或 paused
+ 
  - 拥有一个“foreground Service”
+ 
  - 有一个处于前台的 App “连接”到了当前 App，一般通过“bind service” 或 “content provider”
 
 如果以上三个条件没有一个满足，则认为它是“后台” App。
@@ -40,8 +43,10 @@ tags:
 在一些特定情况下，“后台” App 在一小段时间内也可以没有限制的使用 Service。这种“特定”情况，包含以下几种：
 
  - 处理 FCM 消息
+ 
  这是谷歌自己的消息推送系统，不过在国内无法使用。
  - 接收到广播消息，比如 SMS 信息等
+ 
  - 执行 notification 的 PendingIntent
 
 **那么，我们如何解决 App “后台”运行时的诸多限制呢？**
@@ -49,12 +54,15 @@ tags:
 谷歌提供了两种建议的方案：
 
  - 使用 **JobScheduler** 替代 Service 来执行“周期性”任务
+ 
 关于 JobScheduler 的使用请参考[这里](http://blog.csdn.net/bboyfeiyu/article/details/44809395)。
- - 使用“前台” Service
+
+- 使用“前台” Service
 
 Android O 之前，创建“前台” Service 的步骤：
 
  1. 先使用 `startService()` 方法启动一个 Service；
+ 
  2. 然后使用 `Service.startForeground()` 方法将 Service 设置为“前台” 。
 
 这样在通知栏就会显示一个 notification ，表明 Service 是“前台”服务。
@@ -66,6 +74,7 @@ Android O 之前，创建“前台” Service 的步骤：
 在 Android 7.0 (API level 24)  之后，谷歌已经对广播做了很多限制，具体表现为：
 
  - targetSdkVersion >= 24，Manifest 中声明 `CONNECTIVITY_ACTION` 的广播将无法收到通知。但如果是在代码中注册，则不受此影响。
+ 
  - 不能发送和接收 `ACTION_NEW_PICTURE` 和 `ACTION_NEW_VIDEO` 这两种类型的广播，这个影响所有的 App，与声明的 targetSdkVersion 无关。
  
 而 Android O 让广播的限制变得更加严格，它将广播分为“**implicit**”和“**explicit**”两种类型。
@@ -78,6 +87,7 @@ Android O 之前，创建“前台” Service 的步骤：
 **具体限制表现为：**
 
  - Android O 不允许在 Manifest 中注册“implicit”类型的广播，但可以注册“explicit”类型的广播。
+ 
  - 仍然可以在代码中使用 `Context.registerReceiver()` 注册“implicit”和“explicit”类型的广播。
  
 **“explicit” 类型的广播目前有以下几种：**
