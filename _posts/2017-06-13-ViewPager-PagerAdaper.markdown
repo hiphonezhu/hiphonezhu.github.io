@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "Tomcat7 Maven Plugin 小记"
+title:      "ViewPager 与 PagerAdapter 刷新那点事"
 subtitle:   ""
 date:       2017-06-13 16:36:00
 author:     "zhuhf"
@@ -42,6 +42,7 @@ tags:
             return (fragments != null) ? fragments.size() : 0;
         }
     }
+
 这是一段很常见的 FragmentStatePagerAdapter 的实现，使用的方法也很简单：
 
     private void bindValue(List<Fragment> fragments) {
@@ -53,6 +54,7 @@ tags:
         }
         myAdapter.notifyDataSetChanged();
     }
+
 我们只需要提供 fragments 数据源，调用此方法就可以刷新 ViewPager 展示的内容了。
 ![此处输入图片的描述][1]
 确实，如果真是这样，那么本文就没有写的必要了。
@@ -69,6 +71,7 @@ tags:
         }
         ...
     }
+
 ![此处输入图片的描述][2]
 
 
@@ -102,6 +105,7 @@ POSITION_NONE
         }
         ...
     }
+
 我们只看下关键的几个方法，notifyDataSetChanged() 内部是调用 mViewPagerObserver 的 onChanged() 方法。
 
 而 mViewPagerObserver 是通过 setViewPagerObserver() 方法赋值的，调用 setViewPagerObserver() 方法的地方在 ViewPager 的 setAdaper() 方法中：
@@ -120,6 +124,7 @@ POSITION_NONE
         }
         ...
     }
+
 这样就明显了，其实最终调用的是 PagerObserver 的 onChanged() 方法。PagerObserver 是 ViewPager 的内部类，它的实现也很简单：
 
     private class PagerObserver extends DataSetObserver {
@@ -134,6 +139,7 @@ POSITION_NONE
             dataSetChanged();
         }
     }
+
 可以看到，onChanged() 内部调用的又是 ViewPager 的 dataSetChanged() 的方法。
 
 我们有理由相信，文章开始的 FragmentStatePagerItemAdapter 重写的 getItem() 方法会在这个方法内部被调用，让我们继续一探究竟~
@@ -165,6 +171,7 @@ POSITION_NONE
             requestLayout();
         }
     }
+
 needPopulate：是否需要重新布局，也就是刷新的意思。
 
 needPopulate 为 true 的条件是 newPos == PagerAdapter.POSITION_NONE，而 newPos 是通过 getItemPosition() 方法得到的：
@@ -172,6 +179,7 @@ needPopulate 为 true 的条件是 newPos == PagerAdapter.POSITION_NONE，而 ne
     public int getItemPosition(Object object) {
         return POSITION_UNCHANGED;
     }
+
 这个方法在默认情况下，返回是常量 POSITION_UNCHANGED，它的含义是未发生变化。
 
 这就解释了为何返回 POSITION_NONE，ViewPager 就能够正常刷新了。
@@ -225,6 +233,7 @@ FragmentStatePagerAdapter
         mCurTransaction.remove(fragment);
     }
     ...
+
  mFragments 是用来缓存 Fragment 的集合，在 destroyItem() 方法中，把对应 position 位置的元素设置为 null。
  
 这样使得 instantiateItem() 从缓存中获取的 f == null，然后会调用我们重写的 getItem() 方法。
@@ -261,6 +270,7 @@ FragmentStatePagerAdapter
             return POSITION_NONE;
         }
     }
+
 然后测试了一下，发现居然不会刷新，纳尼？？？
 ![此处输入图片的描述][3]
 
@@ -301,6 +311,7 @@ FragmentPagerAdapter
         // detach Fragment
         mCurTransaction.detach((Fragment)object);
     }
+    
 区别就在于 destroyItem() 对 Fragment 的“销毁”机制不一样。
 
 FragmentPagerAdapter.destroyItem() 方法对于 Fragment 的处理使用的是 detach() 操作，而 FragmentStatePagerAdapter.destroyItem() 使用的是 remove() 操作，区别如下：
