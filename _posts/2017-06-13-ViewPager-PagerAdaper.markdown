@@ -77,8 +77,10 @@ tags:
 
 
 那么，这么做背后的原理是什么呢？让我们来一探究竟~
+
 POSITION_NONE
 =============
+
 我们知道，所有 Adapter（和 ListView、RecyclerView、ViewPager 一起使用等） 刷新的流程都是：
 
  1. 改变数据源（List data）；
@@ -311,7 +313,7 @@ FragmentPagerAdapter
         // detach Fragment
         mCurTransaction.detach((Fragment)object);
     }
-    
+
 区别就在于 destroyItem() 对 Fragment 的“销毁”机制不一样。
 
 FragmentPagerAdapter.destroyItem() 方法对于 Fragment 的处理使用的是 detach() 操作，而 FragmentStatePagerAdapter.destroyItem() 使用的是 remove() 操作，区别如下：
@@ -343,6 +345,7 @@ FragmentPagerAdapter.destroyItem() 方法对于 Fragment 的处理使用的是 d
 
 
 over ~
+
   [1]: http://qq.yh31.com/tp/zjbq/201706081719583453.jpg
   [2]: http://qq.yh31.com/tp/zjbq/201706081719585140.jpg
   [3]: http://qq.yh31.com/tp/zjbq/201706081719588140.jpg
