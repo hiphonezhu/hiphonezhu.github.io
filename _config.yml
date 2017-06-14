@@ -47,15 +47,9 @@ kramdown:
 
 
 
-# Disqus settings
-#disqus_username: _your_disqus_short_name_
-
-# Duoshuo settings
-#duoshuo_username: hiphonezhu
-# Share component is depend on Comment so we can NOT use share only.
-#duoshuo_share: true                     # set to false if you want to use Comment without Sharing
-
-
+# 畅言 settings
+changyan_appid: cyt3PA9Ih 
+changyan_appkey: d6ecb7ea1d8f5611516e1b9120ad1af0 
 
 # Analytics settings
 # Baidu Analytics
