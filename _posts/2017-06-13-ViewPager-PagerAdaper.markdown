@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "ViewPager 与 PagerAdapter 刷新那点事"
+title:      "探究 ViewPager  使用 Fragment 无法刷新的原因"
 subtitle:   ""
 date:       2017-06-13 16:36:00
 author:     "zhuhf"
