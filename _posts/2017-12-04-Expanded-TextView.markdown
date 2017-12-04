@@ -1,6 +1,6 @@
 ---
 layout:     post
-title:      "《从0到1：实现 Android 编译时注解》"
+title:      "实现可在 RecyclerView 中展开和收缩的 TextView"
 subtitle:   ""
 date:       2017-12-04 09:41:00
 author:     "zhuhf"
